@@ -57,7 +57,7 @@ export function parseWordText(text: string): ImportedWord[] {
     const line = rawLine.trim();
     if (!line) continue;
 
-    const separated = line.split(/\s*[,，\t|｜;；]\s*/).filter(Boolean);
+    const separated = line.split(/\s*[,，\t|｜]\s*/).filter(Boolean);
     if (separated.length > 1) {
       rows.push(separated);
       continue;
