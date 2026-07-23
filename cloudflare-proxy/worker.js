@@ -1,7 +1,7 @@
 const UPSTREAM = "https://gaokao-word-master-2026.leiyan2006.chatgpt.site";
 const PREFIX = "/cc/wordmemorize";
 
-export default {
+const worker = {
   async fetch(request) {
     const incoming = new URL(request.url);
     if (incoming.pathname !== PREFIX && !incoming.pathname.startsWith(`${PREFIX}/`)) {
@@ -41,3 +41,5 @@ export default {
     });
   },
 };
+
+export default worker;

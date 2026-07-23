@@ -1,6 +1,7 @@
 export type ImportedWord = {
   word: string;
   meaning: string;
+  partOfSpeech: string;
   phonetic: string;
   phrase: string;
   sentence: string;
@@ -27,13 +28,17 @@ function makeWord(parts: string[]): ImportedWord | null {
   const word = cleanCell(parts[0]).toLowerCase();
   if (!WORD_PATTERN.test(word) || HEADER_WORDS.has(word)) return null;
   const meaning = cleanCell(parts[1]) || "待补充释义";
+  const third = cleanCell(parts[2]);
+  const thirdIsPartOfSpeech = /^(n|v|vt|vi|adj|adv|prep|pron|conj|num|art|aux|modal|interj)\.?([ /,&]+(n|v|vt|vi|adj|adv)\.?)?$/i.test(third);
+  const offset = thirdIsPartOfSpeech ? 1 : 0;
   return {
     word,
     meaning,
-    phonetic: cleanCell(parts[2]),
-    phrase: cleanCell(parts[3]),
-    sentence: cleanCell(parts[4]) || `I am learning the word "${word}".`,
-    translation: cleanCell(parts[5]) || `我正在学习单词“${word}”。`,
+    partOfSpeech: thirdIsPartOfSpeech ? third : cleanCell(parts[6]) || "词性待补充",
+    phonetic: cleanCell(parts[2 + offset]),
+    phrase: cleanCell(parts[3 + offset]),
+    sentence: cleanCell(parts[4 + offset]) || `I am learning the word "${word}".`,
+    translation: cleanCell(parts[5 + offset]) || `我正在学习单词“${word}”。`,
   };
 }
 
