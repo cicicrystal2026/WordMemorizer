@@ -3,7 +3,7 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { ImportedWord, parseWordFile, parseWordText } from "./file-import";
 
-type Word = { word: string; phonetic: string; meaning: string; phrase: string; sentence: string; translation: string };
+type Word = { word: string; phonetic: string; meaning: string; phrase: string; sentence: string; translation: string; partOfSpeech?: string; segments?: string[] };
 type ScreenMark = "known" | "fuzzy" | "new";
 type Stage = "home" | "screen" | "meaning" | "spell" | "context" | "summary";
 
@@ -43,16 +43,66 @@ const IMPORT_EXAMPLE = `abandon,放弃；抛弃
 accurate,准确的
 benefit,益处；使受益`;
 
+const WORD_META: Record<string, { partOfSpeech: string; segments: string[] }> = {
+  abandon: { partOfSpeech: "v.", segments: ["a", "ban", "don"] },
+  accurate: { partOfSpeech: "adj.", segments: ["ac", "cu", "rate"] },
+  benefit: { partOfSpeech: "n. / v.", segments: ["bene", "fit"] },
+  challenge: { partOfSpeech: "n. / v.", segments: ["chal", "lenge"] },
+  concentrate: { partOfSpeech: "v.", segments: ["con", "cen", "trate"] },
+  consequence: { partOfSpeech: "n.", segments: ["con", "se", "quence"] },
+  contribute: { partOfSpeech: "v.", segments: ["con", "tri", "bute"] },
+  determine: { partOfSpeech: "v.", segments: ["de", "ter", "mine"] },
+  efficient: { partOfSpeech: "adj.", segments: ["ef", "fi", "cient"] },
+  essential: { partOfSpeech: "adj.", segments: ["es", "sen", "tial"] },
+  eventually: { partOfSpeech: "adv.", segments: ["e", "ven", "tu", "al", "ly"] },
+  familiar: { partOfSpeech: "adj.", segments: ["fa", "mil", "iar"] },
+  frequent: { partOfSpeech: "adj.", segments: ["fre", "quent"] },
+  improve: { partOfSpeech: "v.", segments: ["im", "prove"] },
+  influence: { partOfSpeech: "n. / v.", segments: ["in", "flu", "ence"] },
+  maintain: { partOfSpeech: "v.", segments: ["main", "tain"] },
+  opportunity: { partOfSpeech: "n.", segments: ["op", "por", "tu", "ni", "ty"] },
+  persuade: { partOfSpeech: "v.", segments: ["per", "suade"] },
+  prefer: { partOfSpeech: "v.", segments: ["pre", "fer"] },
+  prevent: { partOfSpeech: "v.", segments: ["pre", "vent"] },
+  recommend: { partOfSpeech: "v.", segments: ["re", "com", "mend"] },
+  reduce: { partOfSpeech: "v.", segments: ["re", "duce"] },
+  significant: { partOfSpeech: "adj.", segments: ["sig", "nif", "i", "cant"] },
+  sufficient: { partOfSpeech: "adj.", segments: ["suf", "fi", "cient"] },
+  tendency: { partOfSpeech: "n.", segments: ["ten", "den", "cy"] },
+  variety: { partOfSpeech: "n.", segments: ["va", "ri", "e", "ty"] },
+  volunteer: { partOfSpeech: "n. / v.", segments: ["vol", "un", "teer"] },
+  worthwhile: { partOfSpeech: "adj.", segments: ["worth", "while"] },
+};
+
+function presentationFor(word: Word) {
+  const meta = WORD_META[word.word.toLowerCase()];
+  const fallbackSegments = word.word.match(/[^aeiouy]*[aeiouy]+(?:[^aeiouy](?=[^aeiouy]|$))?/gi) ?? [word.word];
+  const segments = word.segments?.length ? word.segments : meta?.segments ?? fallbackSegments;
+  return { partOfSpeech: word.partOfSpeech || meta?.partOfSpeech || "词性待补充", segments };
+}
+
+function ColoredWord({ word, speaking }: { word: Word; speaking: boolean }) {
+  const { segments } = presentationFor(word);
+  return <span className={`colored-word ${speaking ? "speaking" : ""}`} aria-label={word.word}>{segments.map((segment, segmentIndex) => <span className={`root-part part-${segmentIndex % 3}`} style={{ animationDelay: `${segmentIndex * 140}ms` }} key={`${segment}-${segmentIndex}`}>{segment}</span>)}</span>;
+}
+
+function HighlightedSentence({ word }: { word: Word }) {
+  const parts = word.sentence.split(new RegExp(`(${word.word})`, "ig"));
+  return <>{parts.map((part, partIndex) => part.toLowerCase() === word.word.toLowerCase() ? <mark key={partIndex}>{part}</mark> : part)}</>;
+}
+
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function speak(text: string) {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+function speak(text: string, onEnd?: () => void) {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) { onEnd?.(); return; }
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = "en-US";
   utterance.rate = 0.82;
+  utterance.onend = () => onEnd?.();
+  utterance.onerror = () => onEnd?.();
   window.speechSynthesis.speak(utterance);
 }
 
@@ -73,6 +123,8 @@ export default function Home() {
   const [contextScore, setContextScore] = useState(0);
   const [answer, setAnswer] = useState("");
   const [feedback, setFeedback] = useState<"right" | "wrong" | null>(null);
+  const [revealedMark, setRevealedMark] = useState<ScreenMark | null>(null);
+  const [speakingWord, setSpeakingWord] = useState(false);
   const [finishedToday, setFinishedToday] = useState(0);
   const [completedTotal, setCompletedTotal] = useState(0);
   const [showTarget, setShowTarget] = useState(false);
@@ -129,6 +181,8 @@ export default function Home() {
     setIndex(0);
     setAnswer("");
     setFeedback(null);
+    setRevealedMark(null);
+    setSpeakingWord(false);
     setStage("screen");
   }
 
@@ -175,7 +229,7 @@ export default function Home() {
     }
   }
 
-  function updateImportedWord(indexToUpdate: number, field: "word" | "meaning", value: string) {
+  function updateImportedWord(indexToUpdate: number, field: "word" | "meaning" | "partOfSpeech", value: string) {
     setImportedWords((items) => items.map((item, itemIndex) => itemIndex === indexToUpdate ? { ...item, [field]: value } : item));
   }
 
@@ -208,14 +262,29 @@ export default function Home() {
 
   function markWord(mark: ScreenMark) {
     setMarks((prev) => ({ ...prev, [current.word]: mark }));
-    if (index < queue.length - 1) setIndex(index + 1);
-    else {
-      const nextMarks = { ...marks, [current.word]: mark };
-      const next = queue.filter((item) => nextMarks[item.word] !== "known");
+    setRevealedMark(mark);
+  }
+
+  function continueScreen() {
+    if (!revealedMark) return;
+    if (index < queue.length - 1) {
+      setIndex(index + 1);
+      setRevealedMark(null);
+      setSpeakingWord(false);
+    } else {
+      const next = queue.filter((item) => marks[item.word] !== "known");
       setQueue(next.length ? next : queue.slice(0, 6));
       setIndex(0);
+      setRevealedMark(null);
+      setSpeakingWord(false);
       setStage("meaning");
     }
+  }
+
+  function playCurrentWord() {
+    if (!current) return;
+    setSpeakingWord(true);
+    speak(current.word, () => setSpeakingWord(false));
   }
 
   function nextStage(next: Stage, nextQueue = queue) {
@@ -280,7 +349,7 @@ export default function Home() {
     }
   }
 
-  const goHome = () => { setStage("home"); setIndex(0); setFeedback(null); };
+  const goHome = () => { setStage("home"); setIndex(0); setFeedback(null); setRevealedMark(null); setSpeakingWord(false); };
 
   if (stage !== "home") {
     const total = queue.length;
@@ -293,32 +362,41 @@ export default function Home() {
             <span>{stage === "screen" ? "快速筛词" : stage === "meaning" ? "认义检测" : stage === "spell" ? "重点拼写" : stage === "context" ? "真题语境" : "本组完成"}</span>
             {stage !== "summary" && <small>{index + 1} / {total}</small>}
           </div>
-          <button className="icon-button sound-top" onClick={() => current && speak(current.word)} aria-label="播放发音">♪</button>
+          <button className="icon-button sound-top" onClick={playCurrentWord} aria-label="播放发音">♪</button>
         </header>
         <div className="thin-progress"><span style={{ width: `${progress}%` }} /></div>
 
         {stage === "screen" && current && (
-          <section className="study-panel screening">
+          <section className={`study-panel screening ${revealedMark ? "detail-open" : ""}`}>
             <div className="stage-kicker">第一关 · 3秒判断</div>
-            <p className="stage-tip">看到单词，能立刻想到中文意思吗？</p>
-            <button className="speaker-orb" onClick={() => speak(current.word)} aria-label={`朗读 ${current.word}`}>♪</button>
-            <h1 className="hero-word">{current.word}</h1>
-            <p className="phonetic">{current.phonetic}</p>
-            <div className="screen-actions">
-              <button className="mark-button known" onClick={() => markWord("known")}><b>认识</b><span>立刻知道意思</span></button>
-              <button className="mark-button fuzzy" onClick={() => markWord("fuzzy")}><b>模糊</b><span>好像见过</span></button>
-              <button className="mark-button new" onClick={() => markWord("new")}><b>不认识</b><span>重点学习</span></button>
-            </div>
-            <p className="honest-tip">别凭眼熟点“认识”，稍后会随机抽查</p>
+            <p className="stage-tip">先判断熟悉度，再查看完整词义</p>
+            <button className="speaker-orb" onClick={playCurrentWord} aria-label={`朗读 ${current.word}`}>♪</button>
+            <h1 className="hero-word"><ColoredWord word={current} speaking={speakingWord} /></h1>
+            <p className="phonetic">{current.phonetic || "点击发音，跟读两遍"}</p>
+            {!revealedMark ? <>
+              <div className="screen-actions">
+                <button className="mark-button known" onClick={() => markWord("known")}><b>认识</b><span>立刻知道意思</span></button>
+                <button className="mark-button fuzzy" onClick={() => markWord("fuzzy")}><b>模糊</b><span>好像见过</span></button>
+                <button className="mark-button new" onClick={() => markWord("new")}><b>不认识</b><span>重点学习</span></button>
+              </div>
+              <p className="honest-tip">别凭眼熟点“认识”，稍后会随机抽查</p>
+            </> : <div className={`word-detail-card detail-${revealedMark}`}>
+              <div className="detail-badges"><span>{presentationFor(current).partOfSpeech}</span><span>词根 / 音节分色</span></div>
+              <h2>{current.meaning}</h2>
+              {current.phrase && <p className="detail-phrase">常用搭配：<b>{current.phrase}</b></p>}
+              <blockquote><HighlightedSentence word={current} /></blockquote>
+              <p className="detail-translation">{current.translation}</p>
+              <button className="detail-next" onClick={continueScreen}>{index < queue.length - 1 ? "记住了，下一个" : "进入认义检测"}</button>
+            </div>}
           </section>
         )}
 
         {stage === "meaning" && current && (
           <section className="study-panel">
             <div className="stage-kicker">第二关 · 认出意思</div>
-            <button className="speaker-orb small" onClick={() => speak(current.word)} aria-label={`朗读 ${current.word}`}>♪</button>
-            <h1 className="quiz-word">{current.word}</h1>
-            <p className="phonetic">{current.phonetic}</p>
+            <button className="speaker-orb small" onClick={playCurrentWord} aria-label={`朗读 ${current.word}`}>♪</button>
+            <h1 className="quiz-word"><ColoredWord word={current} speaking={speakingWord} /></h1>
+            <p className="phonetic"><span className="pos-inline">{presentationFor(current).partOfSpeech}</span>{current.phonetic}</p>
             <div className="option-list">
               {options.map((option) => <button key={option.word} className={`answer-option ${feedback && option.word === current.word ? "correct" : ""}`} onClick={() => chooseMeaning(option)}>{option.meaning}</button>)}
             </div>
@@ -437,6 +515,7 @@ export default function Home() {
             <div className="preview-head"><b>识别结果</b><span>{importedWords.length} 词 · 可修改后确认</span></div>
             {importedWords.slice(0, 40).map((item, itemIndex) => <div className="preview-row" key={`${item.word}-${itemIndex}`}>
               <input value={item.word} onChange={(event) => updateImportedWord(itemIndex, "word", event.target.value)} aria-label={`第 ${itemIndex + 1} 个英文单词`} />
+              <input value={item.partOfSpeech} onChange={(event) => updateImportedWord(itemIndex, "partOfSpeech", event.target.value)} aria-label={`${item.word} 的词性`} placeholder="词性" />
               <input value={item.meaning} onChange={(event) => updateImportedWord(itemIndex, "meaning", event.target.value)} aria-label={`${item.word} 的中文意思`} />
             </div>)}
             {importedWords.length > 40 && <p className="preview-more">这里只预览前 40 个，确认后会导入全部 {importedWords.length} 个。</p>}

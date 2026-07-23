@@ -33,4 +33,7 @@ test("includes custom planning and file-import controls", async () => {
   assert.match(page, /确认导入并生成学习计划/);
   assert.match(page, /预计 \{planDays/);
   assert.match(page, /localStorage/);
+  assert.match(page, /词根 \/ 音节分色/);
+  assert.match(page, /word-detail-card/);
+  assert.match(page, /partOfSpeech/);
 });
