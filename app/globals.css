@@ -182,3 +182,124 @@ button { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
 }
+
+
+.word-list-card {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 13px;
+  align-items: center;
+  margin-top: 16px;
+  padding: 17px;
+  border: 1px solid #e7def5;
+  border-radius: 22px;
+  background: linear-gradient(135deg, #fff 0%, #f7f1ff 100%);
+  box-shadow: 0 8px 30px rgba(54, 35, 87, .06);
+}
+.word-list-icon {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border-radius: 14px;
+  color: white;
+  background: linear-gradient(135deg, #8a68dc, #5d39b4);
+  font-family: Georgia, serif;
+  font-size: 18px;
+  font-weight: 800;
+}
+.word-list-card h3 { margin: 0; font-size: 16px; }
+.word-list-card p { margin: 4px 0 0; color: var(--muted); font-size: 11px; }
+.word-list-card > button {
+  padding: 9px 12px;
+  border: 1px solid #d7c9f3;
+  border-radius: 12px;
+  color: var(--purple);
+  background: white;
+  font-weight: 800;
+}
+.mission-start:disabled { cursor: default; opacity: .66; }
+.target-menu label { display: block; padding: 4px 4px 8px; color: var(--muted); font-size: 11px; font-weight: 800; }
+.target-input-row { display: grid; grid-template-columns: 1fr auto; gap: 7px; }
+.target-input-row input {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #ddd4ec;
+  border-radius: 10px;
+  color: var(--ink);
+  background: #faf8fd;
+}
+.target-input-row button {
+  width: auto;
+  color: white;
+  background: var(--purple);
+  font-weight: 800;
+}
+.quick-targets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-top: 8px; }
+.quick-targets button { padding: 7px 3px; color: var(--purple); background: var(--purple-soft); font-size: 11px; font-weight: 800; }
+
+.modal-backdrop {
+  position: fixed;
+  z-index: 30;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 20px 12px 0;
+  background: rgba(25, 16, 43, .48);
+  backdrop-filter: blur(5px);
+}
+.import-modal {
+  width: 100%;
+  max-width: 520px;
+  max-height: 92vh;
+  padding: 22px 20px max(24px, env(safe-area-inset-bottom));
+  overflow-y: auto;
+  border-radius: 26px 26px 0 0;
+  background: white;
+  box-shadow: 0 -20px 60px rgba(32, 19, 56, .22);
+}
+.import-head { display: flex; align-items: flex-start; justify-content: space-between; }
+.import-head h2 { margin: 0; font-size: 23px; }
+.import-head > button {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: var(--muted);
+  background: #f4f0f8;
+  font-size: 25px;
+  line-height: 1;
+}
+.import-help { margin: 16px 0 10px; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.import-modal textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 14px;
+  border: 2px solid #e2d9ef;
+  border-radius: 15px;
+  outline: 0;
+  color: var(--ink);
+  background: #fbf9fd;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 14px;
+  line-height: 1.75;
+}
+.import-modal textarea:focus { border-color: var(--purple); box-shadow: 0 0 0 4px #f0eaff; }
+.format-note { display: flex; flex-direction: column; gap: 3px; margin: 10px 2px 0; color: var(--muted); font-size: 10px; }
+.format-note b { color: var(--purple); }
+.import-message { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; color: #267657; background: #eaf8f2; font-size: 11px; }
+.import-primary, .import-secondary { width: 100%; padding: 14px; border-radius: 14px; font-weight: 800; }
+.import-primary { margin-top: 16px; border: 0; color: white; background: linear-gradient(135deg, #7651cf, #5632aa); box-shadow: 0 10px 24px rgba(91, 53, 174, .2); }
+.import-secondary { margin-top: 8px; border: 1px solid #ddd4eb; color: var(--muted); background: white; }
+
+@media (min-width: 700px) {
+  .modal-backdrop { align-items: center; padding: 24px; }
+  .import-modal { border-radius: 26px; }
+}
+@media (max-width: 360px) {
+  .word-list-card { grid-template-columns: auto 1fr; }
+  .word-list-card > button { grid-column: 1 / -1; }
+}
