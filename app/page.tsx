@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { ImportedWord, parseWordFile, parseWordText } from "./file-import";
 
 type Word = { word: string; phonetic: string; meaning: string; phrase: string; sentence: string; translation: string };
 type ScreenMark = "known" | "fuzzy" | "new";
@@ -42,28 +43,8 @@ const IMPORT_EXAMPLE = `abandon,放弃；抛弃
 accurate,准确的
 benefit,益处；使受益`;
 
-function parseWordList(text: string): Word[] {
-  const seen = new Set<string>();
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const parts = line.split(/\s*[,，\t|｜]\s*/).map((item) => item.trim());
-      const word = (parts[0] ?? "").toLowerCase();
-      const meaning = parts[1] ?? "";
-      if (!/^[a-z][a-z'-]*$/i.test(word) || !meaning || seen.has(word)) return null;
-      seen.add(word);
-      return {
-        word,
-        meaning,
-        phonetic: parts[2] || "",
-        phrase: parts[3] || "",
-        sentence: parts[4] || `I am learning the word "${word}".`,
-        translation: parts[5] || `我正在学习单词“${word}”。`,
-      };
-    })
-    .filter((item): item is Word => item !== null);
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function speak(text: string) {
@@ -92,28 +73,39 @@ export default function Home() {
   const [contextScore, setContextScore] = useState(0);
   const [answer, setAnswer] = useState("");
   const [feedback, setFeedback] = useState<"right" | "wrong" | null>(null);
-  const [finishedToday, setFinishedToday] = useState(24);
+  const [finishedToday, setFinishedToday] = useState(0);
+  const [completedTotal, setCompletedTotal] = useState(0);
   const [showTarget, setShowTarget] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importText, setImportText] = useState(IMPORT_EXAMPLE);
-  const [importMessage, setImportMessage] = useState("");
   const [dailyInput, setDailyInput] = useState("80");
+  const [importedWords, setImportedWords] = useState<ImportedWord[]>([]);
+  const [importFileName, setImportFileName] = useState("");
+  const [importStatus, setImportStatus] = useState("");
+  const [importPercent, setImportPercent] = useState(0);
+  const [importError, setImportError] = useState("");
+  const [isParsing, setIsParsing] = useState(false);
 
   useEffect(() => {
     const saved = window.localStorage.getItem("gaokao-word-progress");
     if (!saved) return;
     try {
       const data = JSON.parse(saved);
-      setTarget(data.target ?? 80);
-      setDailyInput(String(data.target ?? 80));
-      setFinishedToday(data.finishedToday ?? 24);
-      if (Array.isArray(data.wordBank) && data.wordBank.length) setWordBank(data.wordBank);
+      const timer = window.setTimeout(() => {
+        const savedTarget = data.target ?? 80;
+        setTarget(savedTarget);
+        setDailyInput(String(savedTarget));
+        setFinishedToday(data.date === todayKey() ? (data.finishedToday ?? 0) : 0);
+        setCompletedTotal(data.completedTotal ?? 0);
+        if (Array.isArray(data.wordBank) && data.wordBank.length) setWordBank(data.wordBank);
+      }, 0);
+      return () => window.clearTimeout(timer);
     } catch {}
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem("gaokao-word-progress", JSON.stringify({ target, finishedToday, wordBank }));
-  }, [target, finishedToday, wordBank]);
+    window.localStorage.setItem("gaokao-word-progress", JSON.stringify({ target, finishedToday, completedTotal, wordBank, date: todayKey() }));
+  }, [target, finishedToday, completedTotal, wordBank]);
 
   const current = queue[index] ?? queue[0];
   const isCustomWordBank = wordBank.length !== WORDS.length || wordBank.some((item, itemIndex) => item.word !== WORDS[itemIndex]?.word);
@@ -121,12 +113,14 @@ export default function Home() {
     if (!current) return [];
     const others = shuffle(wordBank.filter((item) => item.word !== current.word)).slice(0, 3);
     return shuffle([current, ...others]);
-  }, [current, stage, index, wordBank]);
+  }, [current, wordBank]);
 
   function begin() {
-    const remaining = Math.max(1, target - finishedToday);
-    const groupCount = Math.min(GROUP_SIZE, remaining, wordBank.length);
-    setQueue(shuffle(wordBank).slice(0, groupCount));
+    if (!wordBank.length || finishedToday >= target) return;
+    const groupCount = Math.min(GROUP_SIZE, target - finishedToday, wordBank.length);
+    const start = completedTotal % wordBank.length;
+    const ordered = [...wordBank.slice(start), ...wordBank.slice(0, start)];
+    setQueue(ordered.slice(0, groupCount));
     setMarks({});
     setWrong([]);
     setMeaningScore(0);
@@ -139,32 +133,77 @@ export default function Home() {
   }
 
   function saveDailyTarget(value: string) {
-    const maxAllowed = Math.max(1, Math.min(500, wordBank.length));
-    const next = Math.max(1, Math.min(maxAllowed, Number.parseInt(value, 10) || 1));
+    const next = Math.max(1, Math.min(300, Number.parseInt(value, 10) || 1));
     setTarget(next);
     setDailyInput(String(next));
     setFinishedToday((finished) => Math.min(finished, next));
     setShowTarget(false);
   }
 
-  function importWords() {
-    const parsed = parseWordList(importText);
-    if (!parsed.length) {
-      setImportMessage("没有识别到有效单词，请按“英文,中文意思”每行一个填写。");
+  function parsePastedWords() {
+    const parsed = parseWordText(importText);
+    setImportFileName("粘贴的单词表");
+    setImportedWords(parsed);
+    setImportError(parsed.length ? "" : "没有识别到有效单词，请按“英文,中文意思”每行一个填写。");
+    setImportStatus(parsed.length ? `已识别 ${parsed.length} 个单词，请检查后确认` : "");
+    setImportPercent(parsed.length ? 100 : 0);
+  }
+
+  async function handleFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setIsParsing(true);
+    setImportError("");
+    setImportedWords([]);
+    setImportFileName(file.name);
+    try {
+      const parsed = await parseWordFile(file, ({ label, percent }) => {
+        setImportStatus(label);
+        setImportPercent(percent);
+      });
+      setImportedWords(parsed);
+      setImportPercent(100);
+      setImportStatus(`已识别 ${parsed.length} 个单词，请检查后确认`);
+      if (!parsed.length) setImportError("没有识别到有效单词。请换一张更清晰的图片，或检查文档第一列是否为英文单词。");
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "文件解析失败，请换一种格式重试。");
+      setImportStatus("");
+      setImportPercent(0);
+    } finally {
+      setIsParsing(false);
+    }
+  }
+
+  function updateImportedWord(indexToUpdate: number, field: "word" | "meaning", value: string) {
+    setImportedWords((items) => items.map((item, itemIndex) => itemIndex === indexToUpdate ? { ...item, [field]: value } : item));
+  }
+
+  function confirmImport() {
+    const cleaned = importedWords
+      .map((item) => ({ ...item, word: item.word.trim().toLowerCase(), meaning: item.meaning.trim() || "待补充释义" }))
+      .filter((item, itemIndex, items) => /^[a-z][a-z'-]{1,30}$/i.test(item.word) && items.findIndex((candidate) => candidate.word === item.word) === itemIndex);
+    if (!cleaned.length) {
+      setImportError("确认前请至少保留一个有效英文单词。");
       return;
     }
-    const nextTarget = Math.min(target, parsed.length);
-    setWordBank(parsed);
-    setTarget(nextTarget);
-    setDailyInput(String(nextTarget));
+    setWordBank(cleaned);
+    setCompletedTotal(0);
     setFinishedToday(0);
-    setImportMessage(`已成功导入 ${parsed.length} 个单词，并设为当前词表。`);
+    if (target > cleaned.length) {
+      setTarget(cleaned.length);
+      setDailyInput(String(cleaned.length));
+    }
+    setShowImport(false);
   }
 
   function restoreBuiltInWords() {
     setWordBank(WORDS);
+    setCompletedTotal(0);
     setFinishedToday(0);
-    setImportMessage("已恢复内置示例词表。");
+    setImportedWords([]);
+    setImportFileName("");
+    setImportStatus("已恢复内置高考示例词表");
   }
 
   function markWord(mark: ScreenMark) {
@@ -236,6 +275,7 @@ export default function Home() {
       setFeedback(null);
     } else {
       setFinishedToday((value) => Math.min(target, value + queue.length));
+      setCompletedTotal((value) => Math.min(wordBank.length, value + queue.length));
       setStage("summary");
     }
   }
@@ -321,7 +361,7 @@ export default function Home() {
               <div><b>{meaningScore}</b><span>认义答对</span></div><div><b>{spellScore}</b><span>拼写答对</span></div>
               <div><b>{contextScore}</b><span>语境答对</span></div><div><b>{wrong.length}</b><span>待巩固词</span></div>
             </div>
-            <button className="primary-action" onClick={begin}>继续下一组 20 词</button>
+            <button className="primary-action" onClick={begin} disabled={finishedToday >= target}>{finishedToday >= target ? "今日计划已完成" : `继续下一组 ${Math.min(GROUP_SIZE, target - finishedToday)} 词`}</button>
             <button className="text-action" onClick={goHome}>先休息，返回首页</button>
           </section>
         )}
@@ -329,7 +369,10 @@ export default function Home() {
     );
   }
 
-  const completion = Math.round((finishedToday / target) * 100);
+  const completion = Math.round((finishedToday / Math.max(target, 1)) * 100);
+  const remainingWords = Math.max(0, wordBank.length - completedTotal);
+  const planDays = Math.ceil(remainingWords / Math.max(target, 1));
+  const weeklyTarget = target * 7;
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -345,20 +388,20 @@ export default function Home() {
         {showTarget && <div className="target-menu">
             <label htmlFor="daily-target">每天背多少个</label>
             <div className="target-input-row">
-              <input id="daily-target" type="number" min="1" max={Math.min(500, wordBank.length)} value={dailyInput} onChange={(event) => setDailyInput(event.target.value)} />
+              <input id="daily-target" type="number" min="1" max="300" inputMode="numeric" value={dailyInput} onChange={(event) => setDailyInput(event.target.value)} />
               <button onClick={() => saveDailyTarget(dailyInput)}>保存</button>
             </div>
-            <div className="quick-targets">{[30, 60, 80, 100].map((value) => <button key={value} onClick={() => saveDailyTarget(String(value))}>{value}</button>)}</div>
+            <div className="quick-targets">{[50, 80, 100, 150].map((value) => <button key={value} onClick={() => saveDailyTarget(String(value))}>{value}</button>)}</div>
           </div>}
         <div className="mission-progress"><span style={{ width: `${Math.min(completion, 100)}%` }} /></div>
         <div className="mission-stats"><span><i className="dot purple" />已完成 {finishedToday}</span><span><i className="dot orange" />待复习 18</span><b>{completion}%</b></div>
-        <button className="primary-action mission-start" onClick={begin} disabled={!wordBank.length || finishedToday >= target}><span className="play-icon">▶</span><span><b>{finishedToday >= target ? "今日任务已完成" : "继续今日学习"}</b><small>下一组最多 20 词 · 约 12 分钟</small></span></button>
+        <button className="primary-action mission-start" onClick={begin} disabled={!wordBank.length || finishedToday >= target}><span className="play-icon">▶</span><span><b>{finishedToday >= target ? "今日任务已完成" : "继续今日学习"}</b><small>{finishedToday >= target ? "明天自动生成新计划" : `下一组 ${Math.min(GROUP_SIZE, target - finishedToday)} 词 · 约 12 分钟`}</small></span></button>
       </section>
 
       <section className="word-list-card">
         <div className="word-list-icon">Aa</div>
-        <div><span className="section-label">当前词表</span><h3>{isCustomWordBank ? "我的自定义词表" : "高考核心示例词"}</h3><p>共 {wordBank.length} 个单词 · 数据保存在当前设备</p></div>
-        <button onClick={() => { setShowImport(true); setImportMessage(""); }}>导入词表</button>
+        <div><span className="section-label">我的待背词表</span><h3>{isCustomWordBank ? "自定义词表" : "高考核心示例词"} · {wordBank.length} 词</h3><p>每天 {target} 个 · 预计 {planDays || 0} 天完成 · 本周计划 {Math.min(weeklyTarget, remainingWords)} 个</p></div>
+        <button onClick={() => { setShowImport(true); setImportError(""); }}>导入词表</button>
       </section>
 
       <section className="review-card">
@@ -366,7 +409,7 @@ export default function Home() {
       </section>
 
       <section className="week-section">
-        <div className="section-heading"><div><span className="section-label">本周战报</span><h3>目标 500 词</h3></div><b>286 <small>/ 500</small></b></div>
+        <div className="section-heading"><div><span className="section-label">本周规划</span><h3>目标 {weeklyTarget} 词</h3></div><b>{finishedToday} <small>/ {weeklyTarget}</small></b></div>
         <div className="week-bars" aria-label="本周每日学习量">{[64, 82, 58, 92, 40, 0, 0].map((height, day) => <div key={day}><span className={day === 4 ? "today" : ""} style={{ height: `${Math.max(height, 8)}%` }} /><small>{["一", "二", "三", "四", "五", "六", "日"][day]}</small></div>)}</div>
         <div className="week-note"><span>本周已覆盖 <b>286</b> 词</span><span>真正掌握 <b>173</b> 词</span></div>
       </section>
@@ -379,11 +422,26 @@ export default function Home() {
       {showImport && <div className="modal-backdrop" role="presentation">
         <section className="import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title">
           <div className="import-head"><div><span className="section-label">建立自己的词库</span><h2 id="import-title">导入待背单词表</h2></div><button onClick={() => setShowImport(false)} aria-label="关闭">×</button></div>
-          <p className="import-help">每行一个单词，最少填写“英文,中文意思”。也支持中文逗号、Tab 或竖线分隔。</p>
-          <textarea value={importText} onChange={(event) => { setImportText(event.target.value); setImportMessage(""); }} rows={9} aria-label="待背单词表" placeholder={IMPORT_EXAMPLE} />
-          <div className="format-note"><b>可选完整格式</b><span>英文,中文,音标,短语,例句,例句翻译</span></div>
-          {importMessage && <p className="import-message">{importMessage}</p>}
-          <button className="import-primary" onClick={importWords}>解析并使用这个词表</button>
+          <p className="import-help">支持清晰图片、Excel（.xlsx）、Word（.docx）、TXT 和 CSV。文件只在当前浏览器中解析，不会上传保存。</p>
+          <label className={`file-picker ${isParsing ? "disabled" : ""}`}>
+            <input type="file" accept=".png,.jpg,.jpeg,.webp,.xlsx,.docx,.txt,.csv,.tsv" onChange={handleFile} disabled={isParsing} />
+            <span>{isParsing ? "正在解析，请稍候…" : "选择图片或文档"}</span>
+            <small>图片尽量正面、清晰、每行一个单词</small>
+          </label>
+          <div className="import-divider"><span>或者直接粘贴</span></div>
+          <textarea value={importText} onChange={(event) => setImportText(event.target.value)} rows={5} aria-label="待背单词表" placeholder={IMPORT_EXAMPLE} />
+          <button className="parse-text-button" onClick={parsePastedWords}>解析粘贴内容</button>
+          {(importStatus || importFileName) && <div className="parse-status"><div><b>{importFileName || "单词表"}</b><span>{importStatus}</span></div><div className="parse-progress"><span style={{ width: `${importPercent}%` }} /></div></div>}
+          {importError && <p className="import-error" role="alert">{importError}</p>}
+          {!!importedWords.length && <div className="import-preview">
+            <div className="preview-head"><b>识别结果</b><span>{importedWords.length} 词 · 可修改后确认</span></div>
+            {importedWords.slice(0, 40).map((item, itemIndex) => <div className="preview-row" key={`${item.word}-${itemIndex}`}>
+              <input value={item.word} onChange={(event) => updateImportedWord(itemIndex, "word", event.target.value)} aria-label={`第 ${itemIndex + 1} 个英文单词`} />
+              <input value={item.meaning} onChange={(event) => updateImportedWord(itemIndex, "meaning", event.target.value)} aria-label={`${item.word} 的中文意思`} />
+            </div>)}
+            {importedWords.length > 40 && <p className="preview-more">这里只预览前 40 个，确认后会导入全部 {importedWords.length} 个。</p>}
+          </div>}
+          <button className="import-primary" onClick={confirmImport} disabled={!importedWords.length || isParsing}>确认导入并生成学习计划</button>
           <button className="import-secondary" onClick={restoreBuiltInWords}>恢复内置示例词表</button>
         </section>
       </div>}
