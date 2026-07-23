@@ -36,4 +36,8 @@ test("includes custom planning and file-import controls", async () => {
   assert.match(page, /词根 \/ 音节分色/);
   assert.match(page, /word-detail-card/);
   assert.match(page, /partOfSpeech/);
+  assert.match(page, /utterance\.lang = "en-GB"/);
+  assert.match(page, /activeUtterance = utterance/);
+  assert.match(page, /speak\(firstGroup\[0\]\.word/);
+  assert.match(page, /speak\(queue\[nextIndex\]\.word/);
 });

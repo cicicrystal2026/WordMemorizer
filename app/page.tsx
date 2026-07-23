@@ -95,15 +95,35 @@ function todayKey() {
   return new Date().toISOString().slice(0, 10);
 }
 
+let activeUtterance: SpeechSynthesisUtterance | null = null;
+
+function britishVoice() {
+  const voices = window.speechSynthesis.getVoices();
+  return voices.find((voice) => voice.lang.toLowerCase() === "en-gb")
+    ?? voices.find((voice) => voice.lang.toLowerCase().startsWith("en-gb"))
+    ?? voices.find((voice) => /daniel|serena|sonia|ryan|uk english|british/i.test(voice.name))
+    ?? voices.find((voice) => voice.lang.toLowerCase().startsWith("en"));
+}
+
 function speak(text: string, onEnd?: () => void) {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) { onEnd?.(); return; }
-  window.speechSynthesis.cancel();
+  const synthesis = window.speechSynthesis;
+  if (synthesis.speaking || synthesis.pending) synthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = "en-US";
-  utterance.rate = 0.82;
-  utterance.onend = () => onEnd?.();
-  utterance.onerror = () => onEnd?.();
-  window.speechSynthesis.speak(utterance);
+  utterance.lang = "en-GB";
+  utterance.voice = britishVoice() ?? null;
+  utterance.rate = 0.78;
+  utterance.pitch = 1;
+  utterance.volume = 1;
+  activeUtterance = utterance;
+  const finish = () => {
+    if (activeUtterance === utterance) activeUtterance = null;
+    onEnd?.();
+  };
+  utterance.onend = finish;
+  utterance.onerror = finish;
+  if (synthesis.paused) synthesis.resume();
+  synthesis.speak(utterance);
 }
 
 function shuffle<T>(items: T[]) {
@@ -156,6 +176,18 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    if (!("speechSynthesis" in window)) return;
+    const synthesis = window.speechSynthesis;
+    const loadVoices = () => synthesis.getVoices();
+    loadVoices();
+    synthesis.addEventListener?.("voiceschanged", loadVoices);
+    return () => {
+      synthesis.removeEventListener?.("voiceschanged", loadVoices);
+      synthesis.cancel();
+      activeUtterance = null;
+    };
+  }, []);
+  useEffect(() => {
     window.localStorage.setItem("gaokao-word-progress", JSON.stringify({ target, finishedToday, completedTotal, wordBank, date: todayKey() }));
   }, [target, finishedToday, completedTotal, wordBank]);
 
@@ -172,7 +204,8 @@ export default function Home() {
     const groupCount = Math.min(GROUP_SIZE, target - finishedToday, wordBank.length);
     const start = completedTotal % wordBank.length;
     const ordered = [...wordBank.slice(start), ...wordBank.slice(0, start)];
-    setQueue(ordered.slice(0, groupCount));
+    const firstGroup = ordered.slice(0, groupCount);
+    setQueue(firstGroup);
     setMarks({});
     setWrong([]);
     setMeaningScore(0);
@@ -182,8 +215,9 @@ export default function Home() {
     setAnswer("");
     setFeedback(null);
     setRevealedMark(null);
-    setSpeakingWord(false);
+    setSpeakingWord(true);
     setStage("screen");
+    speak(firstGroup[0].word, () => setSpeakingWord(false));
   }
 
   function saveDailyTarget(value: string) {
@@ -268,9 +302,11 @@ export default function Home() {
   function continueScreen() {
     if (!revealedMark) return;
     if (index < queue.length - 1) {
-      setIndex(index + 1);
+      const nextIndex = index + 1;
+      setIndex(nextIndex);
       setRevealedMark(null);
-      setSpeakingWord(false);
+      setSpeakingWord(true);
+      speak(queue[nextIndex].word, () => setSpeakingWord(false));
     } else {
       const next = queue.filter((item) => marks[item.word] !== "known");
       setQueue(next.length ? next : queue.slice(0, 6));

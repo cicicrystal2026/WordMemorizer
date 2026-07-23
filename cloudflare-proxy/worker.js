@@ -1,9 +1,14 @@
 const UPSTREAM = "https://gaokao-word-master-2026.leiyan2006.chatgpt.site";
 const PREFIX = "/cc/wordmemorize";
+const LEGACY_PREFIX = "/cc/wordmomerize";
 
 const worker = {
   async fetch(request) {
     const incoming = new URL(request.url);
+    if (incoming.pathname === LEGACY_PREFIX || incoming.pathname.startsWith(`${LEGACY_PREFIX}/`)) {
+      const suffix = incoming.pathname.slice(LEGACY_PREFIX.length);
+      return Response.redirect(`${incoming.origin}${PREFIX}${suffix || "/"}${incoming.search}`, 308);
+    }
     if (incoming.pathname !== PREFIX && !incoming.pathname.startsWith(`${PREFIX}/`)) {
       return new Response("Not found", { status: 404 });
     }

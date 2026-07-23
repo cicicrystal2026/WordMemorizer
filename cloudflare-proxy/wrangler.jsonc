@@ -7,6 +7,10 @@
     {
       "pattern": "beadfable.com/cc/wordmemorize*",
       "zone_name": "beadfable.com"
+    },
+    {
+      "pattern": "beadfable.com/cc/wordmomerize*",
+      "zone_name": "beadfable.com"
     }
   ],
   "workers_dev": false
