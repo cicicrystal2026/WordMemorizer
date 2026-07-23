@@ -5,16 +5,17 @@ import "./globals.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+const basePath = "/cc/wordmemorize";
 
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost:3000";
   const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
-  const imageUrl = `${protocol}://${host}/og.png`;
+  const imageUrl = `${protocol}://${host}${basePath}/og.png`;
   return {
     title: "高考单词过关器",
     description: "每天覆盖 60–100 个高考核心词，用筛词、拼写、语境和错词复习真正记住。",
-    icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
+    icons: { icon: `${basePath}/favicon.svg`, shortcut: `${basePath}/favicon.svg` },
     openGraph: {
       title: "高考单词过关器",
       description: "每天 80 词，真正记得住。",

@@ -1,0 +1,13 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "beadfable-wordmemorize-proxy",
+  "main": "worker.js",
+  "compatibility_date": "2026-07-23",
+  "routes": [
+    {
+      "pattern": "beadfable.com/cc/wordmemorize*",
+      "zone_name": "beadfable.com"
+    }
+  ],
+  "workers_dev": false
+}

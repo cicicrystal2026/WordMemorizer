@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { ImportedWord, parseWordFile, parseWordText } from "./file-import";
 
-type Word = { word: string; phonetic: string; meaning: string; phrase: string; sentence: string; translation: string };
+type Word = { word: string; phonetic: string; meaning: string; phrase: string; sentence: string; translation: string; partOfSpeech?: string; segments?: string[] };
 type ScreenMark = "known" | "fuzzy" | "new";
 type Stage = "home" | "screen" | "meaning" | "spell" | "context" | "summary";
 
@@ -38,13 +39,70 @@ const WORDS: Word[] = [
 ];
 
 const GROUP_SIZE = 20;
+const IMPORT_EXAMPLE = `abandon,放弃；抛弃
+accurate,准确的
+benefit,益处；使受益`;
 
-function speak(text: string) {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+const WORD_META: Record<string, { partOfSpeech: string; segments: string[] }> = {
+  abandon: { partOfSpeech: "v.", segments: ["a", "ban", "don"] },
+  accurate: { partOfSpeech: "adj.", segments: ["ac", "cu", "rate"] },
+  benefit: { partOfSpeech: "n. / v.", segments: ["bene", "fit"] },
+  challenge: { partOfSpeech: "n. / v.", segments: ["chal", "lenge"] },
+  concentrate: { partOfSpeech: "v.", segments: ["con", "cen", "trate"] },
+  consequence: { partOfSpeech: "n.", segments: ["con", "se", "quence"] },
+  contribute: { partOfSpeech: "v.", segments: ["con", "tri", "bute"] },
+  determine: { partOfSpeech: "v.", segments: ["de", "ter", "mine"] },
+  efficient: { partOfSpeech: "adj.", segments: ["ef", "fi", "cient"] },
+  essential: { partOfSpeech: "adj.", segments: ["es", "sen", "tial"] },
+  eventually: { partOfSpeech: "adv.", segments: ["e", "ven", "tu", "al", "ly"] },
+  familiar: { partOfSpeech: "adj.", segments: ["fa", "mil", "iar"] },
+  frequent: { partOfSpeech: "adj.", segments: ["fre", "quent"] },
+  improve: { partOfSpeech: "v.", segments: ["im", "prove"] },
+  influence: { partOfSpeech: "n. / v.", segments: ["in", "flu", "ence"] },
+  maintain: { partOfSpeech: "v.", segments: ["main", "tain"] },
+  opportunity: { partOfSpeech: "n.", segments: ["op", "por", "tu", "ni", "ty"] },
+  persuade: { partOfSpeech: "v.", segments: ["per", "suade"] },
+  prefer: { partOfSpeech: "v.", segments: ["pre", "fer"] },
+  prevent: { partOfSpeech: "v.", segments: ["pre", "vent"] },
+  recommend: { partOfSpeech: "v.", segments: ["re", "com", "mend"] },
+  reduce: { partOfSpeech: "v.", segments: ["re", "duce"] },
+  significant: { partOfSpeech: "adj.", segments: ["sig", "nif", "i", "cant"] },
+  sufficient: { partOfSpeech: "adj.", segments: ["suf", "fi", "cient"] },
+  tendency: { partOfSpeech: "n.", segments: ["ten", "den", "cy"] },
+  variety: { partOfSpeech: "n.", segments: ["va", "ri", "e", "ty"] },
+  volunteer: { partOfSpeech: "n. / v.", segments: ["vol", "un", "teer"] },
+  worthwhile: { partOfSpeech: "adj.", segments: ["worth", "while"] },
+};
+
+function presentationFor(word: Word) {
+  const meta = WORD_META[word.word.toLowerCase()];
+  const fallbackSegments = word.word.match(/[^aeiouy]*[aeiouy]+(?:[^aeiouy](?=[^aeiouy]|$))?/gi) ?? [word.word];
+  const segments = word.segments?.length ? word.segments : meta?.segments ?? fallbackSegments;
+  return { partOfSpeech: word.partOfSpeech || meta?.partOfSpeech || "词性待补充", segments };
+}
+
+function ColoredWord({ word, speaking }: { word: Word; speaking: boolean }) {
+  const { segments } = presentationFor(word);
+  return <span className={`colored-word ${speaking ? "speaking" : ""}`} aria-label={word.word}>{segments.map((segment, segmentIndex) => <span className={`root-part part-${segmentIndex % 3}`} style={{ animationDelay: `${segmentIndex * 140}ms` }} key={`${segment}-${segmentIndex}`}>{segment}</span>)}</span>;
+}
+
+function HighlightedSentence({ word }: { word: Word }) {
+  const parts = word.sentence.split(new RegExp(`(${word.word})`, "ig"));
+  return <>{parts.map((part, partIndex) => part.toLowerCase() === word.word.toLowerCase() ? <mark key={partIndex}>{part}</mark> : part)}</>;
+}
+
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function speak(text: string, onEnd?: () => void) {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) { onEnd?.(); return; }
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = "en-US";
   utterance.rate = 0.82;
+  utterance.onend = () => onEnd?.();
+  utterance.onerror = () => onEnd?.();
   window.speechSynthesis.speak(utterance);
 }
 
@@ -55,6 +113,7 @@ function shuffle<T>(items: T[]) {
 export default function Home() {
   const [stage, setStage] = useState<Stage>("home");
   const [target, setTarget] = useState(80);
+  const [wordBank, setWordBank] = useState<Word[]>(WORDS);
   const [index, setIndex] = useState(0);
   const [queue, setQueue] = useState<Word[]>(WORDS.slice(0, GROUP_SIZE));
   const [marks, setMarks] = useState<Record<string, ScreenMark>>({});
@@ -64,32 +123,56 @@ export default function Home() {
   const [contextScore, setContextScore] = useState(0);
   const [answer, setAnswer] = useState("");
   const [feedback, setFeedback] = useState<"right" | "wrong" | null>(null);
-  const [finishedToday, setFinishedToday] = useState(24);
+  const [revealedMark, setRevealedMark] = useState<ScreenMark | null>(null);
+  const [speakingWord, setSpeakingWord] = useState(false);
+  const [finishedToday, setFinishedToday] = useState(0);
+  const [completedTotal, setCompletedTotal] = useState(0);
   const [showTarget, setShowTarget] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [importText, setImportText] = useState(IMPORT_EXAMPLE);
+  const [dailyInput, setDailyInput] = useState("80");
+  const [importedWords, setImportedWords] = useState<ImportedWord[]>([]);
+  const [importFileName, setImportFileName] = useState("");
+  const [importStatus, setImportStatus] = useState("");
+  const [importPercent, setImportPercent] = useState(0);
+  const [importError, setImportError] = useState("");
+  const [isParsing, setIsParsing] = useState(false);
 
   useEffect(() => {
     const saved = window.localStorage.getItem("gaokao-word-progress");
     if (!saved) return;
     try {
       const data = JSON.parse(saved);
-      setTarget(data.target ?? 80);
-      setFinishedToday(data.finishedToday ?? 24);
+      const timer = window.setTimeout(() => {
+        const savedTarget = data.target ?? 80;
+        setTarget(savedTarget);
+        setDailyInput(String(savedTarget));
+        setFinishedToday(data.date === todayKey() ? (data.finishedToday ?? 0) : 0);
+        setCompletedTotal(data.completedTotal ?? 0);
+        if (Array.isArray(data.wordBank) && data.wordBank.length) setWordBank(data.wordBank);
+      }, 0);
+      return () => window.clearTimeout(timer);
     } catch {}
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem("gaokao-word-progress", JSON.stringify({ target, finishedToday }));
-  }, [target, finishedToday]);
+    window.localStorage.setItem("gaokao-word-progress", JSON.stringify({ target, finishedToday, completedTotal, wordBank, date: todayKey() }));
+  }, [target, finishedToday, completedTotal, wordBank]);
 
   const current = queue[index] ?? queue[0];
+  const isCustomWordBank = wordBank.length !== WORDS.length || wordBank.some((item, itemIndex) => item.word !== WORDS[itemIndex]?.word);
   const options = useMemo(() => {
     if (!current) return [];
-    const others = shuffle(WORDS.filter((item) => item.word !== current.word)).slice(0, 3);
+    const others = shuffle(wordBank.filter((item) => item.word !== current.word)).slice(0, 3);
     return shuffle([current, ...others]);
-  }, [current, stage, index]);
+  }, [current, wordBank]);
 
   function begin() {
-    setQueue(shuffle(WORDS).slice(0, GROUP_SIZE));
+    if (!wordBank.length || finishedToday >= target) return;
+    const groupCount = Math.min(GROUP_SIZE, target - finishedToday, wordBank.length);
+    const start = completedTotal % wordBank.length;
+    const ordered = [...wordBank.slice(start), ...wordBank.slice(0, start)];
+    setQueue(ordered.slice(0, groupCount));
     setMarks({});
     setWrong([]);
     setMeaningScore(0);
@@ -98,19 +181,110 @@ export default function Home() {
     setIndex(0);
     setAnswer("");
     setFeedback(null);
+    setRevealedMark(null);
+    setSpeakingWord(false);
     setStage("screen");
+  }
+
+  function saveDailyTarget(value: string) {
+    const next = Math.max(1, Math.min(300, Number.parseInt(value, 10) || 1));
+    setTarget(next);
+    setDailyInput(String(next));
+    setFinishedToday((finished) => Math.min(finished, next));
+    setShowTarget(false);
+  }
+
+  function parsePastedWords() {
+    const parsed = parseWordText(importText);
+    setImportFileName("粘贴的单词表");
+    setImportedWords(parsed);
+    setImportError(parsed.length ? "" : "没有识别到有效单词，请按“英文,中文意思”每行一个填写。");
+    setImportStatus(parsed.length ? `已识别 ${parsed.length} 个单词，请检查后确认` : "");
+    setImportPercent(parsed.length ? 100 : 0);
+  }
+
+  async function handleFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setIsParsing(true);
+    setImportError("");
+    setImportedWords([]);
+    setImportFileName(file.name);
+    try {
+      const parsed = await parseWordFile(file, ({ label, percent }) => {
+        setImportStatus(label);
+        setImportPercent(percent);
+      });
+      setImportedWords(parsed);
+      setImportPercent(100);
+      setImportStatus(`已识别 ${parsed.length} 个单词，请检查后确认`);
+      if (!parsed.length) setImportError("没有识别到有效单词。请换一张更清晰的图片，或检查文档第一列是否为英文单词。");
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "文件解析失败，请换一种格式重试。");
+      setImportStatus("");
+      setImportPercent(0);
+    } finally {
+      setIsParsing(false);
+    }
+  }
+
+  function updateImportedWord(indexToUpdate: number, field: "word" | "meaning" | "partOfSpeech", value: string) {
+    setImportedWords((items) => items.map((item, itemIndex) => itemIndex === indexToUpdate ? { ...item, [field]: value } : item));
+  }
+
+  function confirmImport() {
+    const cleaned = importedWords
+      .map((item) => ({ ...item, word: item.word.trim().toLowerCase(), meaning: item.meaning.trim() || "待补充释义" }))
+      .filter((item, itemIndex, items) => /^[a-z][a-z'-]{1,30}$/i.test(item.word) && items.findIndex((candidate) => candidate.word === item.word) === itemIndex);
+    if (!cleaned.length) {
+      setImportError("确认前请至少保留一个有效英文单词。");
+      return;
+    }
+    setWordBank(cleaned);
+    setCompletedTotal(0);
+    setFinishedToday(0);
+    if (target > cleaned.length) {
+      setTarget(cleaned.length);
+      setDailyInput(String(cleaned.length));
+    }
+    setShowImport(false);
+  }
+
+  function restoreBuiltInWords() {
+    setWordBank(WORDS);
+    setCompletedTotal(0);
+    setFinishedToday(0);
+    setImportedWords([]);
+    setImportFileName("");
+    setImportStatus("已恢复内置高考示例词表");
   }
 
   function markWord(mark: ScreenMark) {
     setMarks((prev) => ({ ...prev, [current.word]: mark }));
-    if (index < queue.length - 1) setIndex(index + 1);
-    else {
-      const nextMarks = { ...marks, [current.word]: mark };
-      const next = queue.filter((item) => nextMarks[item.word] !== "known");
+    setRevealedMark(mark);
+  }
+
+  function continueScreen() {
+    if (!revealedMark) return;
+    if (index < queue.length - 1) {
+      setIndex(index + 1);
+      setRevealedMark(null);
+      setSpeakingWord(false);
+    } else {
+      const next = queue.filter((item) => marks[item.word] !== "known");
       setQueue(next.length ? next : queue.slice(0, 6));
       setIndex(0);
+      setRevealedMark(null);
+      setSpeakingWord(false);
       setStage("meaning");
     }
+  }
+
+  function playCurrentWord() {
+    if (!current) return;
+    setSpeakingWord(true);
+    speak(current.word, () => setSpeakingWord(false));
   }
 
   function nextStage(next: Stage, nextQueue = queue) {
@@ -169,12 +343,13 @@ export default function Home() {
       setIndex(index + 1);
       setFeedback(null);
     } else {
-      setFinishedToday((value) => Math.min(target, value + GROUP_SIZE));
+      setFinishedToday((value) => Math.min(target, value + queue.length));
+      setCompletedTotal((value) => Math.min(wordBank.length, value + queue.length));
       setStage("summary");
     }
   }
 
-  const goHome = () => { setStage("home"); setIndex(0); setFeedback(null); };
+  const goHome = () => { setStage("home"); setIndex(0); setFeedback(null); setRevealedMark(null); setSpeakingWord(false); };
 
   if (stage !== "home") {
     const total = queue.length;
@@ -187,32 +362,41 @@ export default function Home() {
             <span>{stage === "screen" ? "快速筛词" : stage === "meaning" ? "认义检测" : stage === "spell" ? "重点拼写" : stage === "context" ? "真题语境" : "本组完成"}</span>
             {stage !== "summary" && <small>{index + 1} / {total}</small>}
           </div>
-          <button className="icon-button sound-top" onClick={() => current && speak(current.word)} aria-label="播放发音">♪</button>
+          <button className="icon-button sound-top" onClick={playCurrentWord} aria-label="播放发音">♪</button>
         </header>
         <div className="thin-progress"><span style={{ width: `${progress}%` }} /></div>
 
         {stage === "screen" && current && (
-          <section className="study-panel screening">
+          <section className={`study-panel screening ${revealedMark ? "detail-open" : ""}`}>
             <div className="stage-kicker">第一关 · 3秒判断</div>
-            <p className="stage-tip">看到单词，能立刻想到中文意思吗？</p>
-            <button className="speaker-orb" onClick={() => speak(current.word)} aria-label={`朗读 ${current.word}`}>♪</button>
-            <h1 className="hero-word">{current.word}</h1>
-            <p className="phonetic">{current.phonetic}</p>
-            <div className="screen-actions">
-              <button className="mark-button known" onClick={() => markWord("known")}><b>认识</b><span>立刻知道意思</span></button>
-              <button className="mark-button fuzzy" onClick={() => markWord("fuzzy")}><b>模糊</b><span>好像见过</span></button>
-              <button className="mark-button new" onClick={() => markWord("new")}><b>不认识</b><span>重点学习</span></button>
-            </div>
-            <p className="honest-tip">别凭眼熟点“认识”，稍后会随机抽查</p>
+            <p className="stage-tip">先判断熟悉度，再查看完整词义</p>
+            <button className="speaker-orb" onClick={playCurrentWord} aria-label={`朗读 ${current.word}`}>♪</button>
+            <h1 className="hero-word"><ColoredWord word={current} speaking={speakingWord} /></h1>
+            <p className="phonetic">{current.phonetic || "点击发音，跟读两遍"}</p>
+            {!revealedMark ? <>
+              <div className="screen-actions">
+                <button className="mark-button known" onClick={() => markWord("known")}><b>认识</b><span>立刻知道意思</span></button>
+                <button className="mark-button fuzzy" onClick={() => markWord("fuzzy")}><b>模糊</b><span>好像见过</span></button>
+                <button className="mark-button new" onClick={() => markWord("new")}><b>不认识</b><span>重点学习</span></button>
+              </div>
+              <p className="honest-tip">别凭眼熟点“认识”，稍后会随机抽查</p>
+            </> : <div className={`word-detail-card detail-${revealedMark}`}>
+              <div className="detail-badges"><span>{presentationFor(current).partOfSpeech}</span><span>词根 / 音节分色</span></div>
+              <h2>{current.meaning}</h2>
+              {current.phrase && <p className="detail-phrase">常用搭配：<b>{current.phrase}</b></p>}
+              <blockquote><HighlightedSentence word={current} /></blockquote>
+              <p className="detail-translation">{current.translation}</p>
+              <button className="detail-next" onClick={continueScreen}>{index < queue.length - 1 ? "记住了，下一个" : "进入认义检测"}</button>
+            </div>}
           </section>
         )}
 
         {stage === "meaning" && current && (
           <section className="study-panel">
             <div className="stage-kicker">第二关 · 认出意思</div>
-            <button className="speaker-orb small" onClick={() => speak(current.word)} aria-label={`朗读 ${current.word}`}>♪</button>
-            <h1 className="quiz-word">{current.word}</h1>
-            <p className="phonetic">{current.phonetic}</p>
+            <button className="speaker-orb small" onClick={playCurrentWord} aria-label={`朗读 ${current.word}`}>♪</button>
+            <h1 className="quiz-word"><ColoredWord word={current} speaking={speakingWord} /></h1>
+            <p className="phonetic"><span className="pos-inline">{presentationFor(current).partOfSpeech}</span>{current.phonetic}</p>
             <div className="option-list">
               {options.map((option) => <button key={option.word} className={`answer-option ${feedback && option.word === current.word ? "correct" : ""}`} onClick={() => chooseMeaning(option)}>{option.meaning}</button>)}
             </div>
@@ -248,14 +432,14 @@ export default function Home() {
         {stage === "summary" && (
           <section className="study-panel summary-panel">
             <div className="success-mark">✓</div>
-            <p className="stage-kicker">今日第 {Math.ceil(finishedToday / GROUP_SIZE)} 组</p>
-            <h1>20 个词，拿下一组！</h1>
+            <p className="stage-kicker">今日第 {Math.max(1, Math.ceil(finishedToday / GROUP_SIZE))} 组</p>
+            <h1>{queue.length} 个词，拿下一组！</h1>
             <p className="summary-copy">不是“看过”，而是用结果证明学会。</p>
             <div className="score-grid">
               <div><b>{meaningScore}</b><span>认义答对</span></div><div><b>{spellScore}</b><span>拼写答对</span></div>
               <div><b>{contextScore}</b><span>语境答对</span></div><div><b>{wrong.length}</b><span>待巩固词</span></div>
             </div>
-            <button className="primary-action" onClick={begin}>继续下一组 20 词</button>
+            <button className="primary-action" onClick={begin} disabled={finishedToday >= target}>{finishedToday >= target ? "今日计划已完成" : `继续下一组 ${Math.min(GROUP_SIZE, target - finishedToday)} 词`}</button>
             <button className="text-action" onClick={goHome}>先休息，返回首页</button>
           </section>
         )}
@@ -263,7 +447,10 @@ export default function Home() {
     );
   }
 
-  const completion = Math.round((finishedToday / target) * 100);
+  const completion = Math.round((finishedToday / Math.max(target, 1)) * 100);
+  const remainingWords = Math.max(0, wordBank.length - completedTotal);
+  const planDays = Math.ceil(remainingWords / Math.max(target, 1));
+  const weeklyTarget = target * 7;
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -274,12 +461,25 @@ export default function Home() {
       <section className="mission-card">
         <div className="mission-top">
           <div><span className="mission-label">今日任务</span><h2>{finishedToday}<small> / {target} 词</small></h2></div>
-          <button className="target-button" onClick={() => setShowTarget(!showTarget)}>标准档⌄</button>
+          <button className="target-button" onClick={() => setShowTarget(!showTarget)}>{target} 词/天⌄</button>
         </div>
-        {showTarget && <div className="target-menu">{[60, 80, 100].map((value) => <button key={value} onClick={() => { setTarget(value); setShowTarget(false); }}><span>{value === 60 ? "稳健档" : value === 80 ? "标准档" : "冲刺档"}</span><b>{value} 词/天</b></button>)}</div>}
+        {showTarget && <div className="target-menu">
+            <label htmlFor="daily-target">每天背多少个</label>
+            <div className="target-input-row">
+              <input id="daily-target" type="number" min="1" max="300" inputMode="numeric" value={dailyInput} onChange={(event) => setDailyInput(event.target.value)} />
+              <button onClick={() => saveDailyTarget(dailyInput)}>保存</button>
+            </div>
+            <div className="quick-targets">{[50, 80, 100, 150].map((value) => <button key={value} onClick={() => saveDailyTarget(String(value))}>{value}</button>)}</div>
+          </div>}
         <div className="mission-progress"><span style={{ width: `${Math.min(completion, 100)}%` }} /></div>
         <div className="mission-stats"><span><i className="dot purple" />已完成 {finishedToday}</span><span><i className="dot orange" />待复习 18</span><b>{completion}%</b></div>
-        <button className="primary-action mission-start" onClick={begin}><span className="play-icon">▶</span><span><b>继续今日学习</b><small>下一组 20 词 · 约 12 分钟</small></span></button>
+        <button className="primary-action mission-start" onClick={begin} disabled={!wordBank.length || finishedToday >= target}><span className="play-icon">▶</span><span><b>{finishedToday >= target ? "今日任务已完成" : "继续今日学习"}</b><small>{finishedToday >= target ? "明天自动生成新计划" : `下一组 ${Math.min(GROUP_SIZE, target - finishedToday)} 词 · 约 12 分钟`}</small></span></button>
+      </section>
+
+      <section className="word-list-card">
+        <div className="word-list-icon">Aa</div>
+        <div><span className="section-label">我的待背词表</span><h3>{isCustomWordBank ? "自定义词表" : "高考核心示例词"} · {wordBank.length} 词</h3><p>每天 {target} 个 · 预计 {planDays || 0} 天完成 · 本周计划 {Math.min(weeklyTarget, remainingWords)} 个</p></div>
+        <button onClick={() => { setShowImport(true); setImportError(""); }}>导入词表</button>
       </section>
 
       <section className="review-card">
@@ -287,7 +487,7 @@ export default function Home() {
       </section>
 
       <section className="week-section">
-        <div className="section-heading"><div><span className="section-label">本周战报</span><h3>目标 500 词</h3></div><b>286 <small>/ 500</small></b></div>
+        <div className="section-heading"><div><span className="section-label">本周规划</span><h3>目标 {weeklyTarget} 词</h3></div><b>{finishedToday} <small>/ {weeklyTarget}</small></b></div>
         <div className="week-bars" aria-label="本周每日学习量">{[64, 82, 58, 92, 40, 0, 0].map((height, day) => <div key={day}><span className={day === 4 ? "today" : ""} style={{ height: `${Math.max(height, 8)}%` }} /><small>{["一", "二", "三", "四", "五", "六", "日"][day]}</small></div>)}</div>
         <div className="week-note"><span>本周已覆盖 <b>286</b> 词</span><span>真正掌握 <b>173</b> 词</span></div>
       </section>
@@ -296,6 +496,34 @@ export default function Home() {
         <div className="section-heading compact"><div><span className="section-label">掌握状态</span><h3>结果比“眼熟”更可靠</h3></div><button>查看词库 ›</button></div>
         <div className="level-row"><div><i className="level-dot red" /><b>42</b><span>没记住</span></div><div><i className="level-dot amber" /><b>71</b><span>刚学会</span></div><div><i className="level-dot green" /><b>128</b><span>待巩固</span></div><div><i className="level-dot black" /><b>396</b><span>已掌握</span></div></div>
       </section>
+
+      {showImport && <div className="modal-backdrop" role="presentation">
+        <section className="import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title">
+          <div className="import-head"><div><span className="section-label">建立自己的词库</span><h2 id="import-title">导入待背单词表</h2></div><button onClick={() => setShowImport(false)} aria-label="关闭">×</button></div>
+          <p className="import-help">支持清晰图片、Excel（.xlsx）、Word（.docx）、TXT 和 CSV。文件只在当前浏览器中解析，不会上传保存。</p>
+          <label className={`file-picker ${isParsing ? "disabled" : ""}`}>
+            <input type="file" accept=".png,.jpg,.jpeg,.webp,.xlsx,.docx,.txt,.csv,.tsv" onChange={handleFile} disabled={isParsing} />
+            <span>{isParsing ? "正在解析，请稍候…" : "选择图片或文档"}</span>
+            <small>图片尽量正面、清晰、每行一个单词</small>
+          </label>
+          <div className="import-divider"><span>或者直接粘贴</span></div>
+          <textarea value={importText} onChange={(event) => setImportText(event.target.value)} rows={5} aria-label="待背单词表" placeholder={IMPORT_EXAMPLE} />
+          <button className="parse-text-button" onClick={parsePastedWords}>解析粘贴内容</button>
+          {(importStatus || importFileName) && <div className="parse-status"><div><b>{importFileName || "单词表"}</b><span>{importStatus}</span></div><div className="parse-progress"><span style={{ width: `${importPercent}%` }} /></div></div>}
+          {importError && <p className="import-error" role="alert">{importError}</p>}
+          {!!importedWords.length && <div className="import-preview">
+            <div className="preview-head"><b>识别结果</b><span>{importedWords.length} 词 · 可修改后确认</span></div>
+            {importedWords.slice(0, 40).map((item, itemIndex) => <div className="preview-row" key={`${item.word}-${itemIndex}`}>
+              <input value={item.word} onChange={(event) => updateImportedWord(itemIndex, "word", event.target.value)} aria-label={`第 ${itemIndex + 1} 个英文单词`} />
+              <input value={item.partOfSpeech} onChange={(event) => updateImportedWord(itemIndex, "partOfSpeech", event.target.value)} aria-label={`${item.word} 的词性`} placeholder="词性" />
+              <input value={item.meaning} onChange={(event) => updateImportedWord(itemIndex, "meaning", event.target.value)} aria-label={`${item.word} 的中文意思`} />
+            </div>)}
+            {importedWords.length > 40 && <p className="preview-more">这里只预览前 40 个，确认后会导入全部 {importedWords.length} 个。</p>}
+          </div>}
+          <button className="import-primary" onClick={confirmImport} disabled={!importedWords.length || isParsing}>确认导入并生成学习计划</button>
+          <button className="import-secondary" onClick={restoreBuiltInWords}>恢复内置示例词表</button>
+        </section>
+      </div>}
 
       <nav className="bottom-nav" aria-label="主导航"><button className="active"><span>⌂</span>今日</button><button><span>▤</span>词库</button><button><span>◎</span>战报</button><button><span>♙</span>我的</button></nav>
     </main>
