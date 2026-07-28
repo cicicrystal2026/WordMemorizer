@@ -1,0 +1,9 @@
+{
+  "desc": "背单词开挂神器页面索引",
+  "rules": [
+    {
+      "action": "disallow",
+      "page": "*"
+    }
+  ]
+}

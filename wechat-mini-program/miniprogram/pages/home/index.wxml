@@ -1,0 +1,46 @@
+<view class="page">
+  <view class="hero">
+    <view>
+      <text class="eyebrow">高一英语 · 今日计划</text>
+      <view class="title">今天继续拿下 {{target}} 个词</view>
+    </view>
+    <view class="streak">🔥 {{streak}} 天</view>
+  </view>
+
+  <view class="card mission">
+    <view class="mission-head">
+      <view>
+        <text class="muted">今日完成</text>
+        <view class="number">{{finished}}<text>/{{target}}</text></view>
+      </view>
+      <view class="percent">{{percent}}%</view>
+    </view>
+    <progress percent="{{percent}}" activeColor="#6c49d8" backgroundColor="#eee8fa" stroke-width="8" border-radius="8" />
+    <view class="stats">
+      <view><text>{{accuracy}}%</text><text class="muted">正确率</text></view>
+      <view><text>{{wrongCount}}</text><text class="muted">待巩固</text></view>
+      <view><text>{{words.length}}</text><text class="muted">词库总数</text></view>
+    </view>
+    <button class="primary" bindtap="startStudy">{{words.length ? "开始今日学习" : "先导入单词表"}}</button>
+  </view>
+
+  <view class="card quick-grid">
+    <button bindtap="goImport"><text>📷</text><text>拍照导入</text></button>
+    <button bindtap="goBind"><text>🔗</text><text>绑定家长</text></button>
+    <button bindtap="goParent"><text>📊</text><text>家长看板</text></button>
+  </view>
+
+  <view class="card">
+    <view class="section-title">今日单词预览</view>
+    <view wx:if="{{loading}}" class="muted">正在加载计划…</view>
+    <view wx:elif="{{!words.length}}" class="empty">
+      <text>还没有词表</text>
+      <text class="muted">拍一张老师发的单词表，AI 会帮你整理。</text>
+    </view>
+    <view wx:else class="word-preview">
+      <view wx:for="{{previewWords}}" wx:key="word">
+        <text>{{item.word}}</text><text class="muted">{{item.meaning}}</text>
+      </view>
+    </view>
+  </view>
+</view>

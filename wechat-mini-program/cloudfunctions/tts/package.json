@@ -1,0 +1,9 @@
+{
+  "name": "tts",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "tencentcloud-sdk-nodejs-tts": "^4.0.973",
+    "wx-server-sdk": "latest"
+  }
+}

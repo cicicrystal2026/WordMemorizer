@@ -1,0 +1,23 @@
+.bind-card {
+  margin-top: 80rpx;
+  text-align: center;
+}
+
+.code {
+  margin: 56rpx 0;
+  color: #5d3fc0;
+  font-size: 86rpx;
+  font-weight: 900;
+  letter-spacing: 18rpx;
+}
+
+.code-input {
+  margin: 50rpx 0 34rpx;
+  padding: 28rpx;
+  border-radius: 22rpx;
+  background: #f4f0fc;
+  font-size: 48rpx;
+  font-weight: 800;
+  letter-spacing: 12rpx;
+  text-align: center;
+}

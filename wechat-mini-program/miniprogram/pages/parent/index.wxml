@@ -1,0 +1,51 @@
+<view class="page">
+  <view class="parent-head">
+    <view>
+      <text class="eyebrow">家长端</text>
+      <view class="title">孩子的学习进度</view>
+    </view>
+    <button class="bind" bindtap="goBind">绑定孩子</button>
+  </view>
+
+  <view wx:if="{{children.length}}" class="card">
+    <picker range="{{children}}" range-key="name" bindchange="changeChild">
+      <view class="child-picker">{{currentChild.name || "选择孩子"}}⌄</view>
+    </picker>
+  </view>
+
+  <view wx:if="{{summary}}" class="card">
+    <view class="section-title">今天完成情况</view>
+    <view class="summary-grid">
+      <view><text>{{summary.finished}}</text><text>完成单词</text></view>
+      <view><text>{{summary.accuracy}}%</text><text>正确率</text></view>
+      <view><text>{{summary.wrongCount}}</text><text>错词</text></view>
+      <view><text>{{summary.minutes}}</text><text>学习分钟</text></view>
+    </view>
+  </view>
+
+  <view wx:if="{{summary}}" class="card">
+    <view class="section-title">近 7 天趋势</view>
+    <view class="chart">
+      <view wx:for="{{days}}" wx:key="date">
+        <view class="bar-wrap"><view class="bar" style="height: {{item.percent}}%;"></view></view>
+        <text>{{item.label}}</text>
+        <text class="count">{{item.count}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{summary}}" class="card">
+    <view class="section-title">需要关注</view>
+    <view class="attention">
+      <view><text>本周未完成天数</text><text>{{summary.missedDays}} 天</text></view>
+      <view><text>反复出错单词</text><text>{{summary.hardWords}} 个</text></view>
+      <view><text>连续学习</text><text>{{summary.streak}} 天</text></view>
+    </view>
+  </view>
+
+  <view wx:if="{{!loading && !children.length}}" class="card empty">
+    <text>还没有绑定孩子</text>
+    <text class="muted">让孩子在学生端生成 6 位绑定码，再由家长输入。</text>
+    <button class="primary" bindtap="goBind">输入绑定码</button>
+  </view>
+</view>

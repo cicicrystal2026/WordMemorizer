@@ -1,0 +1,15 @@
+<view class="page">
+  <view wx:if="{{mode === 'student'}}" class="card bind-card">
+    <view class="section-title">让家长绑定你的学习账号</view>
+    <text class="muted">把下面 6 位数字告诉家长，有效期 30 分钟。</text>
+    <view class="code">{{code || "------"}}</view>
+    <button class="secondary" bindtap="createCode">重新生成</button>
+  </view>
+
+  <view wx:else class="card bind-card">
+    <view class="section-title">绑定孩子</view>
+    <text class="muted">输入孩子学生端显示的 6 位绑定码。</text>
+    <input class="code-input" type="number" maxlength="6" value="{{inputCode}}" bindinput="onInput" placeholder="请输入绑定码" />
+    <button class="primary" bindtap="bindChild">确认绑定</button>
+  </view>
+</view>

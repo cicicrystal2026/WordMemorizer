@@ -1,0 +1,32 @@
+<view class="study-page" wx:if="{{current}}">
+  <view class="progress-row">
+    <text>{{index + 1}} / {{words.length}}</text>
+    <button class="accent" bindtap="changeAccent">{{accent === "uk" ? "英式 🇬🇧" : "美式 🇺🇸"}}</button>
+  </view>
+  <progress percent="{{(index + 1) / words.length * 100}}" activeColor="#6c49d8" backgroundColor="#eee8fa" stroke-width="5" />
+
+  <view class="word-area">
+    <button class="sound {{speaking ? 'playing' : ''}}" bindtap="speak">♪</button>
+    <view class="word">{{current.word}}</view>
+    <view class="phonetic">{{current.phonetic || "点击发音并跟读"}}</view>
+  </view>
+
+  <view wx:if="{{!revealed}}" class="mark-list">
+    <button class="known" data-mark="known" bindtap="mark"><text>认识</text><text>立刻知道意思</text></button>
+    <button class="fuzzy" data-mark="fuzzy" bindtap="mark"><text>模糊</text><text>好像见过</text></button>
+    <button class="new" data-mark="new" bindtap="mark"><text>不认识</text><text>重点学习</text></button>
+  </view>
+
+  <view wx:else class="detail card">
+    <view class="badges"><text>{{current.partOfSpeech || "词性待补充"}}</text><text>词根/音节</text></view>
+    <view class="meaning">{{current.meaning}}</view>
+    <view wx:if="{{current.phrase}}" class="phrase">常用搭配：{{current.phrase}}</view>
+    <view wx:if="{{current.sentence}}" class="sentence">{{current.sentence}}</view>
+    <view wx:if="{{current.translation}}" class="translation">{{current.translation}}</view>
+    <button class="primary" bindtap="next">{{index + 1 < words.length ? "记住了，下一个" : "完成本组"}}</button>
+  </view>
+</view>
+
+<view class="page" wx:else>
+  <view class="card empty">今天暂时没有待学单词，请先导入词表。</view>
+</view>

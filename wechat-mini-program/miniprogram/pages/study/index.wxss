@@ -1,0 +1,116 @@
+.study-page {
+  min-height: 100vh;
+  padding: 28rpx;
+  box-sizing: border-box;
+}
+
+.progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14rpx;
+  color: #71677f;
+}
+
+.accent {
+  margin: 0;
+  padding: 10rpx 18rpx;
+  background: #eee8ff;
+  border-radius: 24rpx;
+  color: #5d3fc0;
+  font-size: 24rpx;
+  line-height: 1.4;
+}
+
+.word-area {
+  padding: 110rpx 0 80rpx;
+  text-align: center;
+}
+
+.sound {
+  width: 104rpx;
+  height: 104rpx;
+  margin-bottom: 42rpx;
+  border-radius: 52rpx;
+  color: #fff;
+  background: #6845d0;
+  font-size: 48rpx;
+}
+
+.sound.playing {
+  animation: pulse 0.7s infinite alternate;
+}
+
+.word {
+  font-family: Georgia, serif;
+  font-size: 84rpx;
+  font-weight: 700;
+}
+
+.phonetic {
+  margin-top: 18rpx;
+  color: #82768f;
+  font-size: 30rpx;
+}
+
+.mark-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.mark-list button {
+  display: flex;
+  justify-content: space-between;
+  padding: 30rpx 34rpx;
+  border-radius: 24rpx;
+  font-size: 26rpx;
+}
+
+.mark-list button text:first-child {
+  font-size: 32rpx;
+  font-weight: 800;
+}
+
+.known { color: #087f59; background: #e5f8f0; }
+.fuzzy { color: #b5670c; background: #fff3df; }
+.new { color: #bd3047; background: #ffe8ec; }
+
+.badges {
+  display: flex;
+  gap: 12rpx;
+}
+
+.badges text {
+  padding: 8rpx 16rpx;
+  border-radius: 16rpx;
+  color: #6142bf;
+  background: #eee8ff;
+  font-size: 22rpx;
+}
+
+.meaning {
+  margin: 26rpx 0 18rpx;
+  font-size: 42rpx;
+  font-weight: 900;
+}
+
+.phrase,
+.translation {
+  color: #746b7e;
+  font-size: 26rpx;
+}
+
+.sentence {
+  margin: 24rpx 0 12rpx;
+  padding: 24rpx;
+  border-left: 8rpx solid #7955df;
+  background: #faf8ff;
+  font-size: 30rpx;
+  line-height: 1.6;
+}
+
+@keyframes pulse {
+  from { transform: scale(1); box-shadow: 0 0 0 rgba(104, 69, 208, 0); }
+  to { transform: scale(1.08); box-shadow: 0 0 36rpx rgba(104, 69, 208, 0.35); }
+}
