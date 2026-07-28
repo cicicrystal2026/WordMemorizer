@@ -1,29 +1,43 @@
 <view class="page">
   <view class="card">
     <view class="section-title">拍照导入老师的单词表</view>
-    <view class="muted help">支持印刷体、表格截图和较清晰的手写英文。识别后会由 AI 补充词性、音标、释义、搭配和例句。</view>
+    <view class="muted help">请保证整页入镜、文字清晰、没有反光。系统会进行两次 OCR 比对，但任何 OCR 都不能保证 100% 正确，必须由拍照人对照原图逐项确认。</view>
     <button class="photo" bindtap="chooseImage" disabled="{{processing}}">
       <text>📷</text>
-      <text>{{processing ? "正在识别并整理…" : "拍照或从相册选择"}}</text>
+      <text>{{processing ? "正在进行双重识别和 AI 整理…" : "拍照或从相册选择"}}</text>
     </button>
   </view>
 
   <view wx:if="{{step === 'review'}}" class="card">
+    <image class="source-image" src="{{imagePath}}" mode="widthFix" />
     <view class="review-head">
-      <view class="section-title">确认识别结果</view>
+      <view class="section-title">逐项对照原图</view>
       <text class="muted">{{words.length}} 个词</text>
     </view>
-    <view class="word-row" wx:for="{{words}}" wx:key="word">
-      <view>
-        <input value="{{item.word}}" data-index="{{index}}" data-field="word" bindinput="editWord" />
-        <input class="meaning" value="{{item.meaning}}" data-index="{{index}}" data-field="meaning" bindinput="editWord" />
+    <view wx:if="{{audit && audit.uncertainCount}}" class="warning">有 {{audit.uncertainCount}} 项两次识别结果不一致或置信度偏低，已标红，请重点检查。</view>
+    <view class="word-row {{item.needsReview ? 'uncertain' : ''}}" wx:for="{{words}}" wx:key="word">
+      <view class="word-fields">
+        <input value="{{item.word}}" data-index="{{index}}" data-field="word" bindinput="editWord" placeholder="英文单词" />
+        <view class="compact-fields">
+          <input value="{{item.phonetic}}" data-index="{{index}}" data-field="phonetic" bindinput="editWord" placeholder="音标" />
+          <input value="{{item.partOfSpeech}}" data-index="{{index}}" data-field="partOfSpeech" bindinput="editWord" placeholder="词性" />
+        </view>
+        <input class="meaning" value="{{item.meaning}}" data-index="{{index}}" data-field="meaning" bindinput="editWord" placeholder="中文释义" />
+        <input class="detail-input" value="{{item.phrase}}" data-index="{{index}}" data-field="phrase" bindinput="editWord" placeholder="常用搭配" />
+        <input class="detail-input" value="{{item.sentence}}" data-index="{{index}}" data-field="sentence" bindinput="editWord" placeholder="英文例句" />
+        <input class="detail-input" value="{{item.translation}}" data-index="{{index}}" data-field="translation" bindinput="editWord" placeholder="例句翻译" />
+        <text class="confidence">OCR 置信度 {{item.confidence}}%{{item.needsReview ? " · 重点核对" : ""}}</text>
       </view>
-      <button data-index="{{index}}" bindtap="removeWord">删除</button>
+      <view class="row-actions">
+        <button class="verify {{item.verified ? 'done' : ''}}" data-index="{{index}}" bindtap="toggleVerified">{{item.verified ? "✓ 已核对" : "点此核对"}}</button>
+        <button class="remove" data-index="{{index}}" bindtap="removeWord">删除</button>
+      </view>
     </view>
+    <button class="add-word" bindtap="addWord">＋ 补充漏掉的单词</button>
     <view class="target-row">
       <text>每天背多少个</text>
       <input type="number" value="{{dailyTarget}}" bindinput="setTarget" />
     </view>
-    <button class="primary" bindtap="confirm">确认导入并生成计划</button>
+    <button class="primary" bindtap="confirm" disabled="{{!allVerified}}">{{allVerified ? "确认无误并导入词库" : "请先逐项核对"}}</button>
   </view>
 </view>

@@ -4,11 +4,11 @@
 
 ## 已包含
 
-- 学生今日任务、学习进度、英式/美式发音切换
-- 拍照或相册选择单词表
-- 腾讯云英文 OCR 云函数
+- 学生今日任务、学习进度、高考听力风格标准英语发音
+- 拍照或相册选择单词表，双重 OCR 比对，逐项人工确认后才能入库
+- 腾讯云英文 OCR + 高精度 OCR 双重识别云函数
 - 腾讯混元 AI 补充音标、词性、释义、搭配和例句
-- 腾讯云 TTS 生成 MP3，并缓存到云存储
+- 腾讯云 TTS 生成高考听力风格 MP3，并缓存到云存储
 - 学生 6 位绑定码与家长绑定
 - 家长查看今日完成量、正确率、错词、学习时长和近 7 天趋势
 
@@ -38,17 +38,12 @@ TENCENT_REGION=ap-guangzhou
 HUNYUAN_API_KEY=
 HUNYUAN_BASE_URL=https://api.hunyuan.cloud.tencent.com/v1/chat/completions
 HUNYUAN_MODEL=hunyuan-turbos-latest
-TTS_UK_VOICE_TYPE=
-TTS_US_VOICE_TYPE=
-AZURE_SPEECH_KEY=
-AZURE_SPEECH_REGION=
-AZURE_TTS_UK_VOICE=en-GB-SoniaNeural
-AZURE_TTS_US_VOICE=en-US-JennyNeural
+TTS_GAOKAO_VOICE_TYPE=101050
 ```
 
 密钥只能放在云函数环境变量中，不能写进小程序前端代码。
 
-如配置了 Azure Speech，发音函数会优先使用明确区分英式和美式的神经网络音色；未配置时回退到腾讯云英文音色。腾讯云当前公开音色表只标注“英文”，不保证英式/美式口音，因此正式上线要实现严格英式发音，建议配置 Azure Speech。
+发音统一使用腾讯云英文精品音色，默认音色 ID 为 101050，语速设置为清晰、略慢的考试听力风格。它是对高考听力风格的模拟，不是考试院原始录音；正式真机测试后可在环境变量中更换腾讯云英文音色。
 
 ## 上线前必须补齐
 

@@ -1,7 +1,7 @@
 <view class="study-page" wx:if="{{current}}">
   <view class="progress-row">
     <text>{{index + 1}} / {{words.length}}</text>
-    <button class="accent" bindtap="changeAccent">{{accent === "uk" ? "英式 🇬🇧" : "美式 🇺🇸"}}</button>
+    <text class="exam-voice">高考听力风格 · 标准英语</text>
   </view>
   <progress percent="{{(index + 1) / words.length * 100}}" activeColor="#6c49d8" backgroundColor="#eee8fa" stroke-width="5" />
 

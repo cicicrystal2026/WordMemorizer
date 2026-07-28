@@ -1,12 +1,18 @@
 const { call, showError } = require("../../utils/api");
 
+function allVerified(words) {
+  return words.length > 0 && words.every((item) => item.verified && item.word.trim());
+}
+
 Page({
   data: {
     step: "choose",
     imagePath: "",
     words: [],
     dailyTarget: 50,
-    processing: false
+    processing: false,
+    audit: null,
+    allVerified: false
   },
 
   async chooseImage() {
@@ -15,18 +21,20 @@ Page({
         count: 1,
         mediaType: ["image"],
         sourceType: ["album", "camera"],
-        sizeType: ["compressed"]
+        sizeType: ["original", "compressed"]
       });
       const imagePath = result.tempFiles[0].tempFilePath;
-      this.setData({ imagePath, processing: true, step: "processing" });
+      this.setData({ imagePath, processing: true, step: "processing", words: [], allVerified: false });
       const cloudPath = `word-images/${Date.now()}-${Math.random().toString(16).slice(2)}.jpg`;
       const upload = await wx.cloud.uploadFile({ cloudPath, filePath: imagePath });
       const ocr = await call("ocr", { fileID: upload.fileID });
-      const enrich = await call("enrich", { lines: ocr.lines });
+      const enrich = await call("enrich", { items: ocr.items });
       this.setData({
         words: enrich.words || [],
+        audit: ocr.audit || null,
         processing: false,
-        step: "review"
+        step: "review",
+        allVerified: false
       });
     } catch (error) {
       this.setData({ processing: false, step: "choose" });
@@ -38,13 +46,40 @@ Page({
     const index = event.currentTarget.dataset.index;
     const field = event.currentTarget.dataset.field;
     const value = event.detail.value;
-    this.setData({ [`words[${index}].${field}`]: value });
+    this.setData({
+      [`words[${index}].${field}`]: value,
+      [`words[${index}].verified`]: false,
+      allVerified: false
+    });
+  },
+
+  toggleVerified(event) {
+    const index = Number(event.currentTarget.dataset.index);
+    const words = this.data.words.map((item, itemIndex) => itemIndex === index ? { ...item, verified: !item.verified } : item);
+    this.setData({ words, allVerified: allVerified(words) });
   },
 
   removeWord(event) {
-    const index = event.currentTarget.dataset.index;
+    const index = Number(event.currentTarget.dataset.index);
     const words = this.data.words.filter((_, itemIndex) => itemIndex !== index);
-    this.setData({ words });
+    this.setData({ words, allVerified: allVerified(words) });
+  },
+
+  addWord() {
+    const words = [...this.data.words, {
+      word: "",
+      meaning: "",
+      phonetic: "",
+      partOfSpeech: "",
+      phrase: "",
+      sentence: "",
+      translation: "",
+      segments: [],
+      confidence: 100,
+      needsReview: true,
+      verified: false
+    }];
+    this.setData({ words, allVerified: false });
   },
 
   setTarget(event) {
@@ -52,11 +87,15 @@ Page({
   },
 
   async confirm() {
-    if (!this.data.words.length) return;
+    if (!this.data.allVerified) {
+      wx.showToast({ title: "请逐项对照原图并标记已核对", icon: "none" });
+      return;
+    }
     try {
+      const words = this.data.words.map(({ confidence, needsReview, verified, ...word }) => word);
       await call("progress", {
         action: "saveWordList",
-        words: this.data.words,
+        words,
         dailyTarget: this.data.dailyTarget
       });
       wx.showToast({ title: "词表已导入", icon: "success" });

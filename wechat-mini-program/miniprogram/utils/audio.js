@@ -9,10 +9,10 @@ function ensurePlayer() {
   return player;
 }
 
-async function playWord(word, accent = "uk", rate = 0.8) {
+async function playWord(word, rate = 0.8) {
   const response = await wx.cloud.callFunction({
     name: "tts",
-    data: { text: word, accent, rate }
+    data: { text: word, style: "gaokao", rate }
   });
   const result = response.result || {};
   if (!result.ok || !result.fileID) {

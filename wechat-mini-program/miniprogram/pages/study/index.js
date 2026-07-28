@@ -8,7 +8,6 @@ Page({
     current: null,
     revealed: false,
     speaking: false,
-    accent: "uk",
     rate: 0.8,
     results: { known: 0, fuzzy: 0, new: 0 },
     startedAt: 0
@@ -37,7 +36,7 @@ Page({
     if (!this.data.current || this.data.speaking) return;
     this.setData({ speaking: true });
     try {
-      await playWord(this.data.current.word, this.data.accent, this.data.rate);
+      await playWord(this.data.current.word, this.data.rate);
     } catch (error) {
       showError(error, "发音失败");
     } finally {
@@ -45,11 +44,6 @@ Page({
     }
   },
 
-  changeAccent() {
-    const accent = this.data.accent === "uk" ? "us" : "uk";
-    this.setData({ accent });
-    this.speak();
-  },
 
   mark(event) {
     const mark = event.currentTarget.dataset.mark;
