@@ -36,7 +36,13 @@ export default function StudyClient() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/study/today?limit=200");
+      // 每日新词量取自当前计划；没有计划时退回一个保守默认值。
+      const planRes = await fetch("/api/plans/current");
+      const planData = (await planRes.json().catch(() => ({}))) as {
+        plan?: { dailyNew: number } | null;
+      };
+      const dailyNew = planData.plan?.dailyNew ?? 20;
+      const res = await fetch(`/api/study/today?limit=200&dailyNew=${dailyNew}`);
       const data = (await res.json()) as { queue?: QueueItem[]; counts?: Counts; error?: string };
       if (!res.ok) {
         setError(data.error ?? "加载失败");
@@ -72,12 +78,20 @@ export default function StudyClient() {
       <Shell>
         <h1 className="text-xl font-semibold">今天没有待学的词</h1>
         <p className="mt-2 text-sm text-[var(--muted)]">先导入一份材料，或等明天的复习到期。</p>
-        <Link
-          href="/import"
-          className="mt-5 inline-block rounded-xl bg-[var(--purple)] px-5 py-2.5 text-white"
-        >
-          导入材料
-        </Link>
+        <div className="mt-5 flex gap-2">
+          <Link
+            href="/import"
+            className="rounded-xl bg-[var(--purple)] px-5 py-2.5 text-white"
+          >
+            导入材料
+          </Link>
+          <Link
+            href="/plan"
+            className="rounded-xl border border-[color:var(--purple-soft)] px-5 py-2.5"
+          >
+            设定计划
+          </Link>
+        </div>
       </Shell>
     );
   }
@@ -321,5 +335,5 @@ function Session({ items, onExit }: { items: QueueItem[]; onExit: () => void }) 
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
-  return <main className="mx-auto max-w-md px-5 py-8">{children}</main>;
+  return <main className="mx-auto max-w-md px-5 pt-8 pb-24">{children}</main>;
 }

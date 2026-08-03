@@ -22,5 +22,6 @@ export function routeError(error: unknown): Response {
       { status: 500 },
     );
   }
-  return Response.json({ error: message }, { status: 500 });
+  // Drizzle 把整条 SQL 拼进 message，真正的原因在 cause 里。
+  return Response.json({ error: cause || message }, { status: 500 });
 }

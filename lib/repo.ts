@@ -16,64 +16,90 @@ export async function ensureUser(db: Db): Promise<void> {
     .onConflictDoNothing();
 }
 
+/**
+ * D1 对单条语句的绑定变量数有上限（超出报 "too many SQL variables"）。
+ * 批大小必须按列数反算，不能拍一个固定行数——9 列时 50 行就是 450 个变量，
+ * 直接超限。
+ */
+const D1_MAX_VARIABLES = 100;
+
+function chunkSize(columns: number): number {
+  return Math.max(1, Math.floor(D1_MAX_VARIABLES / columns));
+}
+
 export async function createWordbook(
   db: Db,
   input: { name: string; sourceType: string; entries: ParsedEntry[] },
 ): Promise<{ wordbookId: number; inserted: number }> {
   await ensureUser(db);
 
+  // 先建空词书，词条全部写入成功后再回填真实词数——否则中途失败会留下
+  // 一个声称有 N 词、实际为空的孤儿词书。
   const [book] = await db
     .insert(wordbooks)
     .values({
       userId: DEFAULT_USER_ID,
       name: input.name,
       sourceType: input.sourceType,
-      totalWords: input.entries.length,
+      totalWords: 0,
     })
     .returning();
 
   if (input.entries.length === 0) return { wordbookId: book.id, inserted: 0 };
 
-  const rows = input.entries.map((e) => ({
-    wordbookId: book.id,
-    seq: e.seq,
-    word: e.word,
-    pos: JSON.stringify(e.pos),
-    meaning: e.meaning,
-    isKey: e.isKey,
-    // 低置信度的条目排进审核队列前列。
-    needsReview: e.confidence !== null && e.confidence < 0.8,
-    confidence: e.confidence,
-  }));
+  try {
+    const rows = input.entries.map((e) => ({
+      wordbookId: book.id,
+      seq: e.seq,
+      word: e.word,
+      pos: JSON.stringify(e.pos),
+      meaning: e.meaning,
+      isKey: e.isKey,
+      // 低置信度的条目排进审核队列前列。
+      needsReview: e.confidence !== null && e.confidence < 0.8,
+      confidence: e.confidence,
+    }));
 
-  // D1 对单条语句的变量数有限制，分批写入。
-  const inserted: { id: number; isKey: boolean }[] = [];
-  for (let i = 0; i < rows.length; i += 50) {
-    const batch = await db
-      .insert(words)
-      .values(rows.slice(i, i + 50))
-      .returning({ id: words.id, isKey: words.isKey });
-    inserted.push(...batch);
+    const wordChunk = chunkSize(8);
+    const inserted: { id: number; isKey: boolean }[] = [];
+    for (let i = 0; i < rows.length; i += wordChunk) {
+      const batch = await db
+        .insert(words)
+        .values(rows.slice(i, i + wordChunk))
+        .returning({ id: words.id, isKey: words.isKey });
+      inserted.push(...batch);
+    }
+
+    const states = inserted.map((w) => {
+      const s = initialState(w.isKey);
+      return {
+        userId: DEFAULT_USER_ID,
+        wordId: w.id,
+        mastery: s.mastery,
+        ease: s.ease,
+        interval: s.interval,
+        // 新词立刻可学。
+        dueAt: today(),
+        reviewCount: 0,
+      };
+    });
+    const stateChunk = chunkSize(7);
+    for (let i = 0; i < states.length; i += stateChunk) {
+      await db.insert(studyStates).values(states.slice(i, i + stateChunk));
+    }
+
+    await db
+      .update(wordbooks)
+      .set({ totalWords: inserted.length })
+      .where(eq(wordbooks.id, book.id));
+
+    return { wordbookId: book.id, inserted: inserted.length };
+  } catch (error) {
+    // 清理半成品，避免残留空词书污染词书列表与计划倒算。
+    await db.delete(words).where(eq(words.wordbookId, book.id)).catch(() => undefined);
+    await db.delete(wordbooks).where(eq(wordbooks.id, book.id)).catch(() => undefined);
+    throw error;
   }
-
-  const states = inserted.map((w) => {
-    const s = initialState(w.isKey);
-    return {
-      userId: DEFAULT_USER_ID,
-      wordId: w.id,
-      mastery: s.mastery,
-      ease: s.ease,
-      interval: s.interval,
-      // 新词立刻可学。
-      dueAt: today(),
-      reviewCount: 0,
-    };
-  });
-  for (let i = 0; i < states.length; i += 50) {
-    await db.insert(studyStates).values(states.slice(i, i + 50));
-  }
-
-  return { wordbookId: book.id, inserted: inserted.length };
 }
 
 export async function listWordbooks(db: Db) {

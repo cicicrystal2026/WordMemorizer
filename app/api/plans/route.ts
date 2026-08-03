@@ -1,5 +1,7 @@
+import { eq } from "drizzle-orm";
+
 import { getDb } from "../../../db";
-import { plans } from "../../../db/schema";
+import { plans, wordbooks } from "../../../db/schema";
 import { guard } from "../../../lib/auth";
 import { DEFAULT_USER_ID, MAX_INTERVAL } from "../../../lib/constants";
 import { forecastLoad, requiredDailyNew, today } from "../../../lib/scheduler";
@@ -17,14 +19,24 @@ export async function POST(request: Request) {
   if (denied) return denied;
 
   try {
-    const { wordbookId, targetDate, totalWords, dailyNew } = (await request.json()) as {
+    const { wordbookId, targetDate, dailyNew } = (await request.json()) as {
       wordbookId?: number;
       targetDate?: string;
-      totalWords?: number;
       dailyNew?: number;
     };
-    if (!wordbookId || !targetDate || !totalWords) {
-      return Response.json({ error: "缺少 wordbookId / targetDate / totalWords" }, { status: 400 });
+    if (!wordbookId || !targetDate) {
+      return Response.json({ error: "缺少 wordbookId / targetDate" }, { status: 400 });
+    }
+
+    // 词数以词书为准，不接受客户端传入——否则倒算结果会与
+    // /api/plans/current 的重算不一致。
+    const [book] = await getDb().select().from(wordbooks).where(eq(wordbooks.id, wordbookId));
+    if (!book || book.userId !== DEFAULT_USER_ID) {
+      return Response.json({ error: "词书不存在" }, { status: 404 });
+    }
+    const totalWords = book.totalWords;
+    if (totalWords < 1) {
+      return Response.json({ error: "该词书还没有词条" }, { status: 400 });
     }
 
     const days = Math.round(
