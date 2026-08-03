@@ -2,14 +2,44 @@
 
 ## 域名
 
-**`beatfable.com`**
+根域 **`beadfable.com`**，在 Cloudflare 注册并托管 DNS。
+本项目使用二级域名 **`word.beadfable.com`**。
 
-待确认（需在本机执行 `Resolve-DnsName beatfable.com -Type NS`）：
+> 注意拼写是 bea**d**fable，不是 beatfable。早期记录曾误写为后者。
 
-- [ ] 注册商是哪家
-- [ ] NS 是否已指向 Cloudflare
-- [ ] 是否已有其他站点占用该域名
-- [ ] 是用根域 `beatfable.com` 还是子域（如 `word.beatfable.com`）
+根域已有其他用途（见下方「账号里已存在的 Worker」），因此走子域，互不影响。
+
+### 备案
+
+Cloudflare Registrar 不是工信部批准的域名注册服务机构，
+**`beadfable.com` 无法办理 ICP 备案**。
+
+这不影响第一步的 Web 端，但决定了第二步微信小程序必须换域名——
+小程序正式版强制要求后端域名已备案。备案域名需在腾讯云/DNSPod 等
+境内注册商注册，且备案流程需要 1～3 周，**宜尽早启动**。
+
+详见 `docs/decisions/001-platform.md`。
+
+## 账号里已存在的 Worker
+
+Cloudflare 账号（Cicicrystal607@gmail.com）下已部署：
+
+| Worker | 说明 |
+| --- | --- |
+| `beadfable-wordmemorize-proxy` | **名称与本项目相关，用途待确认** |
+| `beadfable-web` | 疑似占用根域 `beadfable.com`，待确认 |
+| `signup-stats` | 与本项目无关 |
+
+部署本项目前必须先弄清前两个的用途与路由绑定，
+**避免新 Worker 的路由与既有服务冲突、把线上站点顶掉**。
+
+## 托管形态（已确定）
+
+**Cloudflare Workers**，不使用 Vercel。
+
+理由：现有代码基于 vinext（Cloudflare 官方的 Next.js on Workers 方案），
+构建产物即为 Worker；`.openai/hosting.json` 声明的 D1 与 R2 也是 Cloudflare 独有服务。
+改投 Vercel 等于更换整个底座，且 Vercel 在大陆的访问质量并无优势。
 
 ## 当前托管形态
 
