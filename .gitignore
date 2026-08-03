@@ -40,3 +40,7 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+
+# typescript 增量构建缓存
+tsconfig.tsbuildinfo
+*.tsbuildinfo
