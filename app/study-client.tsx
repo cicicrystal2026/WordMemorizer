@@ -28,43 +28,68 @@ const FLOW_LABEL: Record<Stage, string> = {
   cloze: "语境",
 };
 
+type TodayResult =
+  | { ok: true; queue: QueueItem[]; counts: Counts | null }
+  | { ok: false; error: string };
+
+/**
+ * 纯取数，不碰组件状态——由调用方决定如何处理结果。
+ * 这样副作用里就不会出现「同步调用一个会 setState 的函数」，
+ * 也让重试与首次加载共用同一段逻辑。
+ */
+async function fetchToday(): Promise<TodayResult> {
+  try {
+    // 每日新词量取自当前计划；没有计划时退回一个保守默认值。
+    const planRes = await fetch("/api/plans/current");
+    const planData = (await planRes.json().catch(() => ({}))) as {
+      plan?: { dailyNew: number } | null;
+    };
+    const dailyNew = planData.plan?.dailyNew ?? 20;
+    const res = await fetch(`/api/study/today?limit=200&dailyNew=${dailyNew}`);
+    const data = (await res.json()) as { queue?: QueueItem[]; counts?: Counts; error?: string };
+    if (!res.ok) return { ok: false, error: data.error ?? "加载失败" };
+    return { ok: true, queue: data.queue ?? [], counts: data.counts ?? null };
+  } catch {
+    return { ok: false, error: "网络异常" };
+  }
+}
+
 export default function StudyClient() {
   const [queue, setQueue] = useState<QueueItem[] | null>(null);
   const [counts, setCounts] = useState<Counts | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
 
-  const load = useCallback(async () => {
-    try {
-      // 每日新词量取自当前计划；没有计划时退回一个保守默认值。
-      const planRes = await fetch("/api/plans/current");
-      const planData = (await planRes.json().catch(() => ({}))) as {
-        plan?: { dailyNew: number } | null;
-      };
-      const dailyNew = planData.plan?.dailyNew ?? 20;
-      const res = await fetch(`/api/study/today?limit=200&dailyNew=${dailyNew}`);
-      const data = (await res.json()) as { queue?: QueueItem[]; counts?: Counts; error?: string };
-      if (!res.ok) {
-        setError(data.error ?? "加载失败");
-        return;
-      }
-      setQueue(data.queue ?? []);
-      setCounts(data.counts ?? null);
-      setError(null);
-    } catch {
-      setError("网络异常");
+  const apply = useCallback((result: TodayResult) => {
+    if (!result.ok) {
+      setError(result.error);
+      return;
     }
+    setQueue(result.queue);
+    setCounts(result.counts);
+    setError(null);
   }, []);
 
+  const reload = useCallback(async () => {
+    apply(await fetchToday());
+  }, [apply]);
+
   useEffect(() => {
-    void load();
-  }, [load]);
+    let cancelled = false;
+    void (async () => {
+      const result = await fetchToday();
+      if (!cancelled) apply(result);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [apply]);
 
   if (error) {
     return (
       <Shell>
         <p className="text-sm text-[var(--red)]">{error}</p>
-        <button onClick={() => void load()} className="mt-3 text-sm text-[var(--purple)]">
+        <button onClick={() => void reload()} className="mt-3 text-sm text-[var(--purple)]">
           重试
         </button>
       </Shell>
@@ -102,7 +127,7 @@ export default function StudyClient() {
         items={queue.slice(0, GROUP_SIZE)}
         onExit={() => {
           setRunning(false);
-          void load();
+          void reload();
         }}
       />
     );
@@ -151,11 +176,11 @@ function Session({ items, onExit }: { items: QueueItem[]; onExit: () => void }) 
 
   const options = useMemo(() => {
     if (!current) return [];
-    const others = items
-      .filter((i) => i.wordId !== current.wordId)
-      .sort(() => Math.random() - 0.5)
-      .slice(0, 3);
-    return [current, ...others].sort(() => Math.random() - 0.5);
+    const others = seededShuffle(
+      items.filter((i) => i.wordId !== current.wordId),
+      current.wordId,
+    ).slice(0, 3);
+    return seededShuffle([current, ...others], current.wordId + 1);
   }, [current, items]);
 
   async function report(item: QueueItem, correct: boolean, stageName: Stage) {
@@ -332,6 +357,24 @@ function Session({ items, onExit }: { items: QueueItem[]; onExit: () => void }) 
       </div>
     </Shell>
   );
+}
+
+/**
+ * 以词条 id 为种子的确定性洗牌。
+ *
+ * 选项顺序必须是纯计算：用 Math.random() 时 React 一旦丢弃并重算这个 memo，
+ * 选项就会在孩子看题的过程中重新排列——那是实打实的 bug，不只是 lint 噪音。
+ */
+function seededShuffle<T>(list: T[], seed: number): T[] {
+  const result = [...list];
+  // 线性同余；保证种子为 0 时状态非零，否则会退化成不洗牌。
+  let state = ((seed + 1) * 2654435761) % 2147483647 || 1;
+  for (let i = result.length - 1; i > 0; i -= 1) {
+    state = (state * 1103515245 + 12345) % 2147483648;
+    const j = state % (i + 1);
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
 }
 
 function Shell({ children }: { children: React.ReactNode }) {

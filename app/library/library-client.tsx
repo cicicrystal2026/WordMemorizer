@@ -34,27 +34,52 @@ const MASTERY_VAR: Record<Mastery, string> = {
   mastered: "var(--mastery-mastered)",
 };
 
+type WordsResult = { ok: true; words: WordRow[] } | { ok: false; error: string };
+
+/** 纯取数，不碰组件状态；副作用里因此不会同步调用会 setState 的函数。 */
+async function fetchWords(filter: string): Promise<WordsResult> {
+  try {
+    const res = await fetch(`/api/words?filter=${filter}&limit=500`);
+    const data = (await res.json()) as { words?: WordRow[]; error?: string };
+    if (!res.ok) return { ok: false, error: data.error ?? "加载失败" };
+    return { ok: true, words: data.words ?? [] };
+  } catch {
+    return { ok: false, error: "网络异常" };
+  }
+}
+
 export default function LibraryClient() {
   const [rows, setRows] = useState<WordRow[] | null>(null);
   const [filter, setFilter] = useState("all");
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<number | null>(null);
 
-  const load = useCallback(async (f: string) => {
-    try {
-      const res = await fetch(`/api/words?filter=${f}&limit=500`);
-      const data = (await res.json()) as { words?: WordRow[]; error?: string };
-      if (!res.ok) return setError(data.error ?? "加载失败");
-      setRows(data.words ?? []);
-      setError(null);
-    } catch {
-      setError("网络异常");
+  const apply = useCallback((result: WordsResult) => {
+    if (!result.ok) {
+      setError(result.error);
+      return;
     }
+    setRows(result.words);
+    setError(null);
   }, []);
 
+  const reload = useCallback(
+    async (f: string) => {
+      apply(await fetchWords(f));
+    },
+    [apply],
+  );
+
   useEffect(() => {
-    void load(filter);
-  }, [filter, load]);
+    let cancelled = false;
+    void (async () => {
+      const result = await fetchWords(filter);
+      if (!cancelled) apply(result);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [filter, apply]);
 
   /** 手动改判：算法判错时用户的逃生阀。 */
   async function override(wordId: number, mastery: Mastery) {
@@ -64,7 +89,7 @@ export default function LibraryClient() {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ wordId, override: mastery }),
-    }).catch(() => void load(filter));
+    }).catch(() => void reload(filter));
   }
 
   if (error) return <p className="text-sm text-[var(--red)]">{error}</p>;

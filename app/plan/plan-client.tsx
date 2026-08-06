@@ -17,32 +17,56 @@ type Current = {
   forecast?: LoadPoint[];
 };
 
+type PlanResult =
+  | { ok: true; current: Current; books: Wordbook[] }
+  | { ok: false; error: string };
+
+/** 纯取数，不碰组件状态；副作用里因此不会同步调用会 setState 的函数。 */
+async function fetchPlan(): Promise<PlanResult> {
+  try {
+    const [planRes, bookRes] = await Promise.all([
+      fetch("/api/plans/current"),
+      fetch("/api/wordbooks"),
+    ]);
+    const planData = (await planRes.json()) as Current & { error?: string };
+    const bookData = (await bookRes.json()) as { wordbooks?: Wordbook[]; error?: string };
+    if (!planRes.ok) return { ok: false, error: planData.error ?? "加载失败" };
+    return { ok: true, current: planData, books: bookData.wordbooks ?? [] };
+  } catch {
+    return { ok: false, error: "网络异常" };
+  }
+}
+
 export default function PlanClient() {
   const [current, setCurrent] = useState<Current | null>(null);
   const [books, setBooks] = useState<Wordbook[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
 
-  const load = useCallback(async () => {
-    try {
-      const [planRes, bookRes] = await Promise.all([
-        fetch("/api/plans/current"),
-        fetch("/api/wordbooks"),
-      ]);
-      const planData = (await planRes.json()) as Current & { error?: string };
-      const bookData = (await bookRes.json()) as { wordbooks?: Wordbook[]; error?: string };
-      if (!planRes.ok) return setError(planData.error ?? "加载失败");
-      setCurrent(planData);
-      setBooks(bookData.wordbooks ?? []);
-      setError(null);
-    } catch {
-      setError("网络异常");
+  const apply = useCallback((result: PlanResult) => {
+    if (!result.ok) {
+      setError(result.error);
+      return;
     }
+    setCurrent(result.current);
+    setBooks(result.books);
+    setError(null);
   }, []);
 
+  const reload = useCallback(async () => {
+    apply(await fetchPlan());
+  }, [apply]);
+
   useEffect(() => {
-    void load();
-  }, [load]);
+    let cancelled = false;
+    void (async () => {
+      const result = await fetchPlan();
+      if (!cancelled) apply(result);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [apply]);
 
   if (error) return <p className="text-sm text-[var(--red)]">{error}</p>;
   if (!current) return <p className="text-sm text-[var(--muted)]">加载中…</p>;
@@ -53,7 +77,7 @@ export default function PlanClient() {
         books={books}
         onDone={() => {
           setEditing(false);
-          void load();
+          void reload();
         }}
         onCancel={current.plan ? () => setEditing(false) : undefined}
       />
