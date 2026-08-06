@@ -129,3 +129,47 @@ export function forecastLoad(totalWords: number, dailyNew: number, horizon: numb
     reviews: reviews.get(i + 1) ?? 0,
   }));
 }
+
+export type ReviewCandidate = {
+  wordId: number;
+  /** ISO 日期 YYYY-MM-DD；null 表示尚未安排复习 */
+  dueAt: string | null;
+  /** 当前复习间隔（天） */
+  interval: number;
+  /** 重点词（来自手写圈注或手动标记） */
+  isKey: boolean;
+};
+
+/**
+ * 从到期候选中选出今天要做的复习，按学习顺序返回 wordId。
+ */
+export function prioritizeReviews(
+  candidates: ReviewCandidate[],
+  today: string,
+  capacity: number,
+): number[] {
+  if (capacity <= 0) return [];
+
+  const DAY_MS = 86_400_000;
+  const todayMs = Date.parse(today);
+
+  // 紧急度用「逾期天数 / 间隔」的比值而非绝对逾期天数：
+  // 间隔 1 天的词逾期 3 天比间隔 15 天的逾期 3 天更接近遗忘临界。
+  return candidates
+    .filter(
+      (c): c is ReviewCandidate & { dueAt: string } =>
+        c.dueAt !== null && Date.parse(c.dueAt) <= todayMs,
+    )
+    .map((c) => ({
+      wordId: c.wordId,
+      isKey: c.isKey,
+      urgency: (todayMs - Date.parse(c.dueAt)) / DAY_MS / Math.max(c.interval, 1),
+    }))
+    .sort((a, b) => {
+      if (a.urgency !== b.urgency) return b.urgency - a.urgency;
+      if (a.isKey !== b.isKey) return a.isKey ? -1 : 1;
+      return a.wordId - b.wordId;
+    })
+    .slice(0, capacity)
+    .map((c) => c.wordId);
+}
