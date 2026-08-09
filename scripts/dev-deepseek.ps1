@@ -33,7 +33,7 @@
 param(
     [string]$Model    = 'deepseek-chat',
     [string]$BaseUrl  = 'https://api.deepseek.com/anthropic',
-    [string]$RepoPath = 'D:\AI\AI-App\wordmemorizer',
+    [string]$RepoPath = 'D:\codex-project\beidancishenqi',
     [switch]$CheckOnly
 )
 

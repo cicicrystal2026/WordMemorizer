@@ -47,7 +47,7 @@ setx DEEPSEEK_API_KEY "sk-你的密钥"
 # 2. 关掉 PowerShell 窗口重开（setx 对当前窗口不生效）
 
 # 3. 验证连通性，不启动 CLI
-cd D:\AI\AI-App\wordmemorizer
+cd D:\codex-project\beidancishenqi
 .\scripts\dev-deepseek.ps1 -CheckOnly
 
 # 4. 验证通过后正式启动
