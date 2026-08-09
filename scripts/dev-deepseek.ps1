@@ -41,6 +41,12 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $OutputEncoding = [Console]::OutputEncoding = [Text.Encoding]::UTF8
 
+# PowerShell 5.1 的 Invoke-RestMethod 可能仍按 TLS 1.0 协商，对方只收 1.2+ 时
+# 会报「基础连接已关闭」——错误信息完全看不出是协议问题。PowerShell 7 无此问题，
+# 但这行加上无害。
+[Net.ServicePointManager]::SecurityProtocol =
+    [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+
 function Write-Step ($Message) { Write-Host "`n==> $Message" -ForegroundColor Cyan }
 function Write-Ok   ($Message) { Write-Host "    $Message" -ForegroundColor Green }
 function Write-Warn ($Message) { Write-Host "    $Message" -ForegroundColor Yellow }
