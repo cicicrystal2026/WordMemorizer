@@ -1,0 +1,749 @@
+<title>背单词应用 · 架构与进度评审</title>
+
+<style>
+  :root {
+    --ground: #f4f1fa;
+    --surface: #ffffff;
+    --surface-2: #faf8fd;
+    --line: #e6e0f2;
+    --line-strong: #d3c9e8;
+    --ink: #221b36;
+    --ink-2: #4a4260;
+    --muted: #6d6682;
+    --accent: #6845c3;
+    --accent-soft: #efeaff;
+    --done: #1f8a5c;
+    --done-soft: #e4f4ec;
+    --partial: #b25c08;
+    --partial-soft: #fdefdd;
+    --todo: #857e96;
+    --todo-soft: #f0edf5;
+    --blocked: #b03546;
+    --blocked-soft: #fdeaed;
+
+    --display: "Songti SC", "STSong", "Source Han Serif SC", "Noto Serif CJK SC", "SimSun", Georgia, serif;
+    --body: "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, "Cascadia Mono", monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #14111e;
+      --surface: #1d182b;
+      --surface-2: #241e34;
+      --line: #322a47;
+      --line-strong: #443a5f;
+      --ink: #ece7f7;
+      --ink-2: #c3bad8;
+      --muted: #948ca8;
+      --accent: #ab8df2;
+      --accent-soft: #2b2242;
+      --done: #4ec48d;
+      --done-soft: #163328;
+      --partial: #e09b4d;
+      --partial-soft: #38270f;
+      --todo: #8f88a3;
+      --todo-soft: #272134;
+      --blocked: #f0808f;
+      --blocked-soft: #3a1d24;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #14111e;
+    --surface: #1d182b;
+    --surface-2: #241e34;
+    --line: #322a47;
+    --line-strong: #443a5f;
+    --ink: #ece7f7;
+    --ink-2: #c3bad8;
+    --muted: #948ca8;
+    --accent: #ab8df2;
+    --accent-soft: #2b2242;
+    --done: #4ec48d;
+    --done-soft: #163328;
+    --partial: #e09b4d;
+    --partial-soft: #38270f;
+    --todo: #8f88a3;
+    --todo-soft: #272134;
+    --blocked: #f0808f;
+    --blocked-soft: #3a1d24;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 15px;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 60rem;
+    margin: 0 auto;
+    padding: 3rem 1.25rem 5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 3.25rem;
+  }
+
+  /* ---------------------------------------------------------- 通用排版 */
+  h1, h2, h3 { font-family: var(--display); font-weight: 700; text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(1.9rem, 5.5vw, 2.75rem); letter-spacing: -.01em; line-height: 1.25; }
+  h2 { font-size: 1.4rem; letter-spacing: .01em; }
+  h3 { font-size: 1.02rem; }
+  p { margin: 0; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: .7rem;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 .6rem;
+  }
+
+  .lede { color: var(--ink-2); font-size: 1.02rem; max-width: 44rem; }
+  .note { color: var(--muted); font-size: .84rem; }
+
+  section { display: flex; flex-direction: column; gap: 1.1rem; }
+
+  .sec-head { display: flex; flex-direction: column; gap: .35rem; border-bottom: 1px solid var(--line); padding-bottom: .75rem; }
+  .sec-head .note { max-width: 46rem; }
+
+  code, .mono { font-family: var(--mono); font-size: .86em; }
+  code { background: var(--surface-2); border: 1px solid var(--line); border-radius: .25rem; padding: .05em .35em; }
+
+  a { color: var(--accent); }
+
+  /* ---------------------------------------------------------- 头部 */
+  header .meta {
+    font-family: var(--mono);
+    font-size: .76rem;
+    color: var(--muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem 1.1rem;
+    margin-top: 1rem;
+  }
+
+  /* ---------------------------------------------------------- 总览 */
+  .overview {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: .5rem;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .bar {
+    display: flex;
+    height: 2.4rem;
+    border-radius: .25rem;
+    overflow: hidden;
+    border: 1px solid var(--line-strong);
+  }
+  .bar > div {
+    display: grid;
+    place-items: center;
+    font-family: var(--mono);
+    font-size: .78rem;
+    font-weight: 600;
+    color: var(--surface);
+    min-width: 0;
+  }
+  .bar .s-done { background: var(--done); }
+  .bar .s-partial { background: var(--partial); }
+  .bar .s-todo { background: var(--todo); }
+  .bar .s-reserved { background: var(--line-strong); color: var(--ink-2); }
+
+  .counts { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: 1rem; }
+  .counts div { display: flex; flex-direction: column; gap: .1rem; }
+  .counts b { font-family: var(--mono); font-size: 1.7rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2; }
+  .counts span { font-size: .8rem; color: var(--muted); }
+  .c-done b { color: var(--done); }
+  .c-partial b { color: var(--partial); }
+  .c-todo b { color: var(--ink-2); }
+  .c-reserved b { color: var(--muted); }
+
+  /* ---------------------------------------------------------- 分层剖面 */
+  .layers { display: flex; flex-direction: column; gap: .5rem; }
+
+  .layer {
+    display: grid;
+    grid-template-columns: 8.5rem 1fr;
+    gap: 1rem;
+    align-items: start;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    border-radius: .4rem;
+    padding: .9rem 1rem;
+  }
+  .layer-name { display: flex; flex-direction: column; gap: .1rem; }
+  .layer-name b { font-size: .92rem; font-weight: 600; }
+  .layer-name span { font-family: var(--mono); font-size: .68rem; color: var(--muted); letter-spacing: .04em; }
+  .chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+
+  .chip {
+    font-size: .78rem;
+    line-height: 1.5;
+    padding: .18rem .55rem;
+    border-radius: .25rem;
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .chip.done { background: var(--done-soft); color: var(--done); border-color: color-mix(in srgb, var(--done) 30%, transparent); }
+  .chip.partial { background: var(--partial-soft); color: var(--partial); border-color: color-mix(in srgb, var(--partial) 32%, transparent); }
+  .chip.todo { background: var(--todo-soft); color: var(--todo); border-color: var(--line); }
+  .chip.reserved { background: transparent; color: var(--muted); border: 1px dashed var(--line-strong); }
+  .chip.blocked { background: var(--blocked-soft); color: var(--blocked); border-color: color-mix(in srgb, var(--blocked) 32%, transparent); }
+  .chip.spec { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+
+  .legend { display: flex; flex-wrap: wrap; gap: .45rem; }
+
+  @media (max-width: 40rem) {
+    .layer { grid-template-columns: 1fr; gap: .6rem; }
+  }
+
+  /* ---------------------------------------------------------- 模块表 */
+  .table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: .4rem; background: var(--surface); }
+  table { width: 100%; border-collapse: collapse; font-size: .88rem; min-width: 34rem; }
+  th, td { text-align: left; padding: .65rem .85rem; border-bottom: 1px solid var(--line); }
+  thead th {
+    font-family: var(--mono);
+    font-size: .7rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+    background: var(--surface-2);
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; width: 3.2rem; }
+  td.name b { font-weight: 600; }
+  td.name span { display: block; color: var(--muted); font-size: .78rem; }
+
+  .minibar { display: flex; height: .5rem; width: 7rem; border-radius: .15rem; overflow: hidden; background: var(--todo-soft); border: 1px solid var(--line); }
+  .minibar i { display: block; height: 100%; }
+  .minibar .m-done { background: var(--done); }
+  .minibar .m-partial { background: var(--partial); }
+
+  /* ---------------------------------------------------------- 依赖链 */
+  .chain { display: flex; flex-direction: column; gap: 1rem; }
+  .chain-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .5rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: .4rem;
+    padding: .9rem 1rem;
+  }
+  .chain-label { font-family: var(--mono); font-size: .7rem; letter-spacing: .08em; color: var(--muted); width: 100%; }
+  .node {
+    padding: .35rem .7rem;
+    border-radius: .3rem;
+    font-size: .84rem;
+    border: 1px solid var(--line-strong);
+    background: var(--surface-2);
+  }
+  .node.ready { border-color: color-mix(in srgb, var(--done) 45%, transparent); background: var(--done-soft); color: var(--done); font-weight: 600; }
+  .node.blocked { border-color: color-mix(in srgb, var(--blocked) 40%, transparent); background: var(--blocked-soft); color: var(--blocked); }
+  .arrow { color: var(--muted); font-family: var(--mono); font-size: .9rem; }
+
+  /* ---------------------------------------------------------- 卡片组 */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: .4rem;
+    padding: 1.1rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+  }
+  .card.warn { border-left: 3px solid var(--blocked); }
+  .card h3 { font-family: var(--body); font-size: .95rem; font-weight: 700; }
+  .card p { font-size: .86rem; color: var(--ink-2); }
+  .card .tag {
+    align-self: flex-start;
+    font-family: var(--mono);
+    font-size: .68rem;
+    letter-spacing: .08em;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    border-radius: .2rem;
+    padding: .05rem .35rem;
+  }
+
+  /* ---------------------------------------------------------- 下一步 */
+  .steps { display: flex; flex-direction: column; gap: .6rem; counter-reset: step; }
+  .step {
+    display: grid;
+    grid-template-columns: 2rem 1fr;
+    gap: .9rem;
+    align-items: start;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: .4rem;
+    padding: .95rem 1.1rem;
+  }
+  .step::before {
+    counter-increment: step;
+    content: counter(step);
+    font-family: var(--mono);
+    font-size: .95rem;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-radius: .25rem;
+    height: 2rem;
+    display: grid;
+    place-items: center;
+  }
+  .step div { display: flex; flex-direction: column; gap: .2rem; }
+  .step b { font-size: .95rem; }
+  .step span { font-size: .85rem; color: var(--ink-2); }
+
+  footer { border-top: 1px solid var(--line); padding-top: 1.25rem; }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">架构与进度评审</p>
+    <h1>高考背单词应用<br>系统现状与待办</h1>
+    <p class="lede" style="margin-top:1rem">
+      为一个孩子、一个月 400 词的真实材料而建。当前主干已经能跑通「导入 → 定计划 → 每日学习 → 看进度」的完整闭环，
+      三条差异化能力——图片识别、内容补全、发音纠正——尚未开工。
+    </p>
+    <div class="meta">
+      <span>分支 claude/word-memorizer-product-design-b63tz4</span>
+      <span>3 340 行应用代码</span>
+      <span>31 项测试全绿</span>
+      <span>2026-08-10</span>
+    </div>
+  </header>
+
+  <!-- ============================================================ 总览 -->
+  <section>
+    <div class="sec-head">
+      <h2>一、总览</h2>
+      <p class="note">按 PRD 逐条拆到功能点级，共 87 项。下面的比例条即为真实完成度，不做四舍五入的乐观处理。</p>
+    </div>
+
+    <div class="overview">
+      <div class="bar" role="img" aria-label="87 个功能点中：已实现 19 项，部分实现 6 项，未实现 58 项，预留未接线 4 项">
+        <div class="s-done" style="flex:19">19</div>
+        <div class="s-partial" style="flex:6">6</div>
+        <div class="s-todo" style="flex:58">58</div>
+        <div class="s-reserved" style="flex:4">4</div>
+      </div>
+
+      <div class="counts">
+        <div class="c-done"><b>19</b><span>已实现并验证</span></div>
+        <div class="c-partial"><b>6</b><span>部分实现，易误判为完成</span></div>
+        <div class="c-todo"><b>58</b><span>未实现</span></div>
+        <div class="c-reserved"><b>4</b><span>建表/配置已就位，代码零引用</span></div>
+      </div>
+
+      <p class="note">
+        「部分实现」这一栏最值得盯：<code>多文件选择</code>只对 PDF 生效、<code>左滑改判</code>实为点击展开、
+        <code>词条列表</code>缺音标、<code>结算页</code>没有分项得分。这些在演示时看不出问题，孩子用起来才会撞上。
+      </p>
+    </div>
+  </section>
+
+  <!-- ======================================================== 分层剖面 -->
+  <section>
+    <div class="sec-head">
+      <h2>二、系统分层剖面</h2>
+      <p class="note">
+        自上而下六层。颜色即状态——绿=已实现，橙=部分，灰=未做，虚线框=已预留未接线，红=被外部条件阻塞。
+      </p>
+    </div>
+
+    <div class="legend">
+      <span class="chip done">已实现</span>
+      <span class="chip partial">部分实现</span>
+      <span class="chip todo">未实现</span>
+      <span class="chip reserved">预留未接线</span>
+      <span class="chip spec">规格已写待执行</span>
+      <span class="chip blocked">外部阻塞</span>
+    </div>
+
+    <div class="layers">
+
+      <div class="layer">
+        <div class="layer-name"><b>交付形态</b><span>DELIVERY</span></div>
+        <div class="chips">
+          <span class="chip done">Cloudflare Workers 托管</span>
+          <span class="chip todo">word.beadfable.com 绑定</span>
+          <span class="chip todo">PWA 离线安装</span>
+          <span class="chip todo">桌面宽屏适配</span>
+          <span class="chip blocked">微信小程序 · 卡备案</span>
+        </div>
+      </div>
+
+      <div class="layer">
+        <div class="layer-name"><b>页面</b><span>app/*/page.tsx</span></div>
+        <div class="chips">
+          <span class="chip done">今日</span>
+          <span class="chip done">导入</span>
+          <span class="chip done">计划</span>
+          <span class="chip done">词库</span>
+          <span class="chip done">战报</span>
+          <span class="chip done">登录</span>
+          <span class="chip todo">审核（PRD 必需）</span>
+          <span class="chip todo">词条详情</span>
+          <span class="chip todo">设置</span>
+        </div>
+      </div>
+
+      <div class="layer">
+        <div class="layer-name"><b>接口</b><span>app/api/*/route.ts</span></div>
+        <div class="chips">
+          <span class="chip done">auth</span>
+          <span class="chip done">import</span>
+          <span class="chip done">wordbooks</span>
+          <span class="chip done">words</span>
+          <span class="chip done">plans</span>
+          <span class="chip done">plans/current</span>
+          <span class="chip done">study/today</span>
+          <span class="chip done">study/answer</span>
+          <span class="chip done">stats</span>
+          <span class="chip todo">tts</span>
+          <span class="chip todo">pronunciation</span>
+          <span class="chip todo">generate</span>
+          <span class="chip todo">jobs</span>
+        </div>
+      </div>
+
+      <div class="layer">
+        <div class="layer-name"><b>领域逻辑</b><span>lib/</span></div>
+        <div class="chips">
+          <span class="chip done">scheduler · SM-2</span>
+          <span class="chip done">repo · 队列组装</span>
+          <span class="chip done">parse/tabular</span>
+          <span class="chip done">parse/pdf-text</span>
+          <span class="chip done">parse/entry</span>
+          <span class="chip done">auth</span>
+          <span class="chip done">route-error</span>
+          <span class="chip spec">session · 分级出题</span>
+          <span class="chip todo">图片识别</span>
+          <span class="chip todo">内容生成</span>
+          <span class="chip todo">发音评测</span>
+        </div>
+      </div>
+
+      <div class="layer">
+        <div class="layer-name"><b>数据</b><span>db/schema.ts · 9 表</span></div>
+        <div class="chips">
+          <span class="chip done">users</span>
+          <span class="chip done">wordbooks</span>
+          <span class="chip done">words</span>
+          <span class="chip done">study_states</span>
+          <span class="chip done">study_logs</span>
+          <span class="chip done">plans</span>
+          <span class="chip reserved">word_details</span>
+          <span class="chip reserved">import_jobs</span>
+          <span class="chip reserved">pron_scores</span>
+        </div>
+      </div>
+
+      <div class="layer">
+        <div class="layer-name"><b>平台</b><span>PLATFORM</span></div>
+        <div class="chips">
+          <span class="chip done">D1 · SQLite</span>
+          <span class="chip done">Drizzle 迁移</span>
+          <span class="chip reserved">R2 · FILES 绑定</span>
+          <span class="chip todo">多模态识别服务</span>
+          <span class="chip todo">TTS（en-GB）</span>
+          <span class="chip todo">音素级评分服务</span>
+        </div>
+      </div>
+
+    </div>
+
+    <p class="note">
+      这张图解释了为什么「完成度 22%」不等于「还剩 78% 的工期」：前四层的骨架已经立起来了，
+      剩下的多数功能是往既有分层里填肉，而不是再搭一套结构。真正需要新增基础设施的只有最底下那三个灰块。
+    </p>
+  </section>
+
+  <!-- ======================================================== 模块进度 -->
+  <section>
+    <div class="sec-head">
+      <h2>三、模块进度</h2>
+      <p class="note">按 PRD 章节统计。条形中绿色为已实现、橙色为部分实现。</p>
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>模块</th>
+            <th>进度</th>
+            <th class="num">总数</th>
+            <th class="num">已实现</th>
+            <th class="num">部分</th>
+            <th class="num">待办</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="name"><b>5.1 导入</b><span>表格与文本层 PDF 已覆盖当前材料</span></td>
+            <td><span class="minibar"><i class="m-done" style="width:29.4%"></i><i class="m-partial" style="width:11.8%"></i></span></td>
+            <td class="num">17</td><td class="num">5</td><td class="num">2</td><td class="num">10</td>
+          </tr>
+          <tr>
+            <td class="name"><b>5.2 审核</b><span>PRD 标为必需环节，整块缺失</span></td>
+            <td><span class="minibar"></span></td>
+            <td class="num">5</td><td class="num">0</td><td class="num">0</td><td class="num">5</td>
+          </tr>
+          <tr>
+            <td class="name"><b>5.3 计划</b><span>倒算、负荷曲线、落后补救均已上线</span></td>
+            <td><span class="minibar"><i class="m-done" style="width:71.4%"></i></span></td>
+            <td class="num">7</td><td class="num">5</td><td class="num">0</td><td class="num">2</td>
+          </tr>
+          <tr>
+            <td class="name"><b>5.4 学习流程</b><span>三关可跑，缺跟读与分级出题</span></td>
+            <td><span class="minibar"><i class="m-done" style="width:33.3%"></i><i class="m-partial" style="width:11.1%"></i></span></td>
+            <td class="num">9</td><td class="num">3</td><td class="num">1</td><td class="num">5</td>
+          </tr>
+          <tr>
+            <td class="name"><b>5.5 词库管理</b><span>列表与筛选可用，手势与详情页未做</span></td>
+            <td><span class="minibar"><i class="m-done" style="width:7.7%"></i><i class="m-partial" style="width:23.1%"></i></span></td>
+            <td class="num">13</td><td class="num">1</td><td class="num">3</td><td class="num">9</td>
+          </tr>
+          <tr>
+            <td class="name"><b>5.6 发音</b><span>差异化能力，整块未开始</span></td>
+            <td><span class="minibar"></span></td>
+            <td class="num">8</td><td class="num">0</td><td class="num">0</td><td class="num">8</td>
+          </tr>
+          <tr>
+            <td class="name"><b>5.7 战报</b><span>今日量、掌握度分布、连续天数、错词榜</span></td>
+            <td><span class="minibar"><i class="m-done" style="width:66.7%"></i></span></td>
+            <td class="num">6</td><td class="num">4</td><td class="num">0</td><td class="num">2</td>
+          </tr>
+          <tr>
+            <td class="name"><b>5.8 访问控制</b><span>口令登录已通，缺退出入口</span></td>
+            <td><span class="minibar"><i class="m-done" style="width:50%"></i></span></td>
+            <td class="num">2</td><td class="num">1</td><td class="num">0</td><td class="num">1</td>
+          </tr>
+          <tr>
+            <td class="name"><b>数据规格</b><span>4 项建好未接线</span></td>
+            <td><span class="minibar"></span></td>
+            <td class="num">5</td><td class="num">0</td><td class="num">0</td><td class="num">5</td>
+          </tr>
+          <tr>
+            <td class="name"><b>非功能</b><span>离线优先、PWA、宽屏、字号</span></td>
+            <td><span class="minibar"></span></td>
+            <td class="num">8</td><td class="num">0</td><td class="num">0</td><td class="num">8</td>
+          </tr>
+          <tr>
+            <td class="name"><b>M4 内容补全</b><span>音标、例句、搭配、词根助记</span></td>
+            <td><span class="minibar"></span></td>
+            <td class="num">7</td><td class="num">0</td><td class="num">0</td><td class="num">7</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ========================================================= 关键路径 -->
+  <section>
+    <div class="sec-head">
+      <h2>四、关键路径</h2>
+      <p class="note">
+        剩下的 58 项不是平铺的待办清单，它们之间有硬依赖。排错顺序会让做完的东西返工。
+      </p>
+    </div>
+
+    <div class="chain">
+      <div class="chain-row">
+        <span class="chain-label">链条一 · 发音（你最想要的能力，链最长）</span>
+        <span class="node">M4 生成音标</span>
+        <span class="arrow">→</span>
+        <span class="node">TTS 播放示范</span>
+        <span class="arrow">→</span>
+        <span class="node">录音 + 音素评分</span>
+        <span class="arrow">→</span>
+        <span class="node">战报薄弱音素</span>
+      </div>
+
+      <div class="chain-row">
+        <span class="chain-label">链条二 · 图片导入</span>
+        <span class="node">审核界面</span>
+        <span class="arrow">→</span>
+        <span class="node">多模态识别</span>
+        <span class="arrow">→</span>
+        <span class="node">圈注识别 → 重点词</span>
+        <span class="arrow">→</span>
+        <span class="node">异步任务 + R2 存原图</span>
+      </div>
+
+      <div class="chain-row">
+        <span class="chain-label">链条三 · 练习质量（无依赖，现在就能做）</span>
+        <span class="node ready">分级出题</span>
+        <span class="arrow">·</span>
+        <span class="node ready">答错重现</span>
+        <span class="arrow">·</span>
+        <span class="node ready">遮盖自测</span>
+        <span class="arrow">·</span>
+        <span class="node ready">结算分项</span>
+      </div>
+    </div>
+
+    <p class="note">
+      链条一的顺序不能颠倒：音素级评分要拿孩子的发音和标准音标逐音素对齐，
+      <b>没有音标就没有对齐的基准</b>，先做录音只能得到一个「像/不像」的分数，
+      而那正是竞品「超级单词表」也没做、我们打算超过它的地方。
+    </p>
+
+    <p class="note">
+      链条二把审核放在识别之前，是因为识别一定会错。先有能改的界面，识别的错误才是可修复的；
+      顺序反过来，孩子看到的就是一堆改不了的错词——这正是竞品用免责声明搪塞的做法。
+    </p>
+  </section>
+
+  <!-- ========================================================= 外部阻塞 -->
+  <section>
+    <div class="sec-head">
+      <h2>五、三个需要你拍板的外部条件</h2>
+      <p class="note">这三项写代码解决不了，且都在关键路径上。越早启动，后面越不堵。</p>
+    </div>
+
+    <div class="cards">
+      <div class="card warn">
+        <span class="tag">阻塞小程序</span>
+        <h3>ICP 备案</h3>
+        <p>
+          <code>beadfable.com</code> 在 Cloudflare Registrar，不是工信部认证的域名注册商，无法备案。
+          Web 端不受影响，但小程序上线必须备案。要走这条路，需在腾讯云或阿里云另购一个域名走个人备案，
+          周期通常两到三周，且期间需要邮寄核验材料。
+        </p>
+      </div>
+
+      <div class="card warn">
+        <span class="tag">阻塞 M4 与 M5</span>
+        <h3>内容生成用哪个模型</h3>
+        <p>
+          音标、例句、搭配、词根助记要在运行时生成。这与写代码的 DeepSeek 是两回事——
+          它生成的是孩子每天要看的学习内容，错一个音标就是错误示范。
+          需要先定模型，再定「命中 3500 底库时交叉校验、分歧置为待审核」的校验策略。
+        </p>
+      </div>
+
+      <div class="card warn">
+        <span class="tag">阻塞发音纠正</span>
+        <h3>音素级评分怎么做</h3>
+        <p>
+          浏览器自带的 Web Speech API 只能给出整词的识别置信度，做不到「/θ/ 发成了 /s/」这种颗粒度。
+          真正的音素级评分需要云端服务。这是整个产品最贵也最有价值的一块，
+          要先确认可用的服务与成本，再决定 M5 的排期。
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================= 分支收敛 -->
+  <section>
+    <div class="sec-head">
+      <h2>六、仓库现状：四条线并行</h2>
+      <p class="note">这是当前最该先解决的架构问题，不解决会持续产生重复劳动。</p>
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>分支</th><th>内容</th><th>架构基础</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="name"><b>claude/…-b63tz4</b><span>本文档描述的主干</span></td>
+            <td>PRD、架构决策、D1 库表、导入 / 计划 / 学习 / 词库 / 战报</td>
+            <td>分层完整</td>
+          </tr>
+          <tr>
+            <td class="name"><b>agent/custom-word-list</b><span>另一个 agent</span></td>
+            <td>文件导入、词条详情卡、词根高亮、Cloudflare 代理（1 826 行）</td>
+            <td>老脚手架，无数据层</td>
+          </tr>
+          <tr>
+            <td class="name"><b>codex/product-foundation</b><span>codex</span></td>
+            <td>小程序 OCR、音频</td>
+            <td>老脚手架</td>
+          </tr>
+          <tr>
+            <td class="name"><b>main</b><span>起点</span></td>
+            <td>初始脚手架</td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="note">
+      后两条都长在老脚手架上：只有 <code>app/page.tsx</code>，没有 <code>db/schema.ts</code>、没有 API 层。
+      它们和主干不是「功能不同」，是<b>两套不同的架构</b>，合不到一起。
+    </p>
+
+    <p class="note">
+      <b>建议以主干为唯一基线</b>，另外两条的成果按功能点重新拆成任务规格、在主干上重写。
+      理由不是主干写得更好，而是只有它的每一项都能对上 PRD 的验收条件；
+      合并三套架构的成本，会高于按规格重写一遍。其中
+      <code>agent/custom-word-list</code> 的词条详情卡正好对应我们缺的 #50 / #51，是最值得优先搬过来的部分。
+    </p>
+  </section>
+
+  <!-- ========================================================= 下一步 -->
+  <section>
+    <div class="sec-head">
+      <h2>七、接下来四步</h2>
+      <p class="note">按「解除阻塞的程度」排序，不按 PRD 章节顺序。</p>
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <div>
+          <b>把练习质量补齐（链条三）</b>
+          <span>规格已写好：<code>002-session-logic</code>、<code>003-session-ui</code>、<code>004-mask-self-test</code>。纯前端无外部依赖，适合交给 DeepSeek 执行，也顺便验证协作流程。</span>
+        </div>
+      </div>
+      <div class="step">
+        <div>
+          <b>确定内容生成的模型与校验策略</b>
+          <span>这是链条一的第一环，也是词条详情页的填充内容。定下来之前，发音相关的一切都动不了。</span>
+        </div>
+      </div>
+      <div class="step">
+        <div>
+          <b>做词条详情页 + 可编辑</b>
+          <span>为 M4 生成的内容准备承载界面，同时把 <code>edited_by_user</code> 保护接上——AI 写错了孩子能改，这是学习产品的底线。</span>
+        </div>
+      </div>
+      <div class="step">
+        <div>
+          <b>并行启动备案</b>
+          <span>只要还想上小程序，就该现在开始，因为它的周期是按周算的，和写代码互不占用。</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p class="note">
+      功能点明细见仓库 <code>docs/backlog.md</code>，架构决策见 <code>docs/architecture.md</code> 与 <code>docs/decisions/</code>，
+      任务规格见 <code>docs/tasks/</code>。本页是这些文档的汇总视图，以仓库内容为准。
+    </p>
+  </footer>
+
+</div>
