@@ -173,6 +173,12 @@ export default function LibraryClient() {
                   {r.dueAt && (
                     <p className="mt-2 text-xs text-[var(--muted)]">下次复习 {r.dueAt}</p>
                   )}
+                  <Link
+                    href={`/library/${r.wordId}`}
+                    className="mt-2 inline-block text-xs text-[var(--purple)]"
+                  >
+                    查看详情 · 改内容 ›
+                  </Link>
                 </div>
               )}
             </li>
