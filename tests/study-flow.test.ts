@@ -9,7 +9,7 @@ import {
 } from "../lib/study-flow.ts";
 
 test("按掌握度收缩学习关卡", () => {
-  assert.deepEqual(stagesForMastery("new"), ["recognize", "meaning", "spell"]);
+  assert.deepEqual(stagesForMastery("new"), ["recognize", "shadow", "meaning", "spell"]);
   assert.deepEqual(stagesForMastery("learning"), ["meaning", "spell"]);
   assert.deepEqual(stagesForMastery("familiar"), ["spell"]);
   assert.deepEqual(stagesForMastery("mastered"), []);

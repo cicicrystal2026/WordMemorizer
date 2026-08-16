@@ -195,6 +195,11 @@ function Session({ items, onExit }: { items: QueueItem[]; onExit: () => void }) 
     return seededShuffle([current, ...others], current.wordId + 1);
   }, [current, items]);
 
+  useEffect(() => {
+    if (!current || (stage !== "recognize" && stage !== "shadow")) return;
+    speakBritish(current.word);
+  }, [current, stage]);
+
   async function report(item: QueueItem, correct: boolean, stageName: Stage) {
     await fetch("/api/study/answer", {
       method: "POST",
@@ -253,13 +258,11 @@ function Session({ items, onExit }: { items: QueueItem[]; onExit: () => void }) 
           </p>
           <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
             <Score label="认读" score={results.recognize} />
+            <Score label="跟读" score={results.shadow} />
             <Score label="认义" score={results.meaning} />
             <Score label="拼写" score={results.spell} />
-            <div className="rounded-xl bg-[var(--purple-soft)] p-3">
-              <dt className="text-xs text-[var(--muted)]">发音</dt>
-              <dd className="mt-1 font-medium">M5 开启</dd>
-            </div>
           </dl>
+          <p className="mt-3 text-xs text-[var(--muted)]">发音评分将在后续版本接入。</p>
           <button
             onClick={onExit}
             className="mt-4 w-full rounded-xl bg-[var(--purple)] px-5 py-3 text-white"
@@ -302,10 +305,35 @@ function Session({ items, onExit }: { items: QueueItem[]; onExit: () => void }) 
             <p className="mt-1 text-sm text-[var(--muted)]">{current.pos.join(" / ")}</p>
             <p className="mt-3 text-base">{current.meaning}</p>
             <button
-              onClick={() => advance(true)}
-              className="mt-6 w-full rounded-xl bg-[var(--purple)] px-5 py-3 text-white"
+              onClick={() => speakBritish(current.word)}
+              className="mt-5 rounded-xl border border-[color:var(--purple-soft)] px-4 py-2 text-sm text-[var(--purple)]"
             >
-              记住了
+              🔊 再听一遍（英式发音）
+            </button>
+            <button
+              onClick={() => advance(true)}
+              className="mt-3 w-full rounded-xl bg-[var(--purple)] px-5 py-3 text-white"
+            >
+              听完了，开始跟读
+            </button>
+          </>
+        )}
+
+        {stage === "shadow" && (
+          <>
+            <h2 className="text-3xl font-semibold">{current.word}</h2>
+            <p className="mt-3 text-base">听一遍，然后大声跟读一遍。</p>
+            <button
+              onClick={() => speakBritish(current.word)}
+              className="mt-5 rounded-xl border border-[color:var(--purple-soft)] px-4 py-2 text-sm text-[var(--purple)]"
+            >
+              🔊 再听一遍（英式发音）
+            </button>
+            <button
+              onClick={() => advance(true)}
+              className="mt-3 w-full rounded-xl bg-[var(--purple)] px-5 py-3 text-white"
+            >
+              我读好了
             </button>
           </>
         )}
@@ -401,6 +429,16 @@ function Score({ label, score }: { label: string; score: { correct: number; tota
       <dd className="mt-1 font-medium">{score.total > 0 ? `${score.correct}/${score.total}` : "—"}</dd>
     </div>
   );
+}
+
+/** 浏览器原生语音足够覆盖首学跟读；后续音素评分不会复用或保存录音。 */
+function speakBritish(word: string): void {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(word);
+  utterance.lang = "en-GB";
+  utterance.rate = 0.78;
+  window.speechSynthesis.speak(utterance);
 }
 
 /**

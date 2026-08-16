@@ -18,7 +18,8 @@ export function emptyStageResults(): StageResult {
  * 语境填空依赖 M4 例句，接入前熟悉词稳定地走拼写关。
  */
 export function stagesForMastery(mastery: Mastery): Stage[] {
-  if (mastery === "new") return ["recognize", "meaning", "spell"];
+  // 首学先听英式发音并开口跟读，之后才进入认义和拼写。
+  if (mastery === "new") return ["recognize", "shadow", "meaning", "spell"];
   if (mastery === "learning") return ["meaning", "spell"];
   if (mastery === "familiar") return ["spell"];
   return [];
