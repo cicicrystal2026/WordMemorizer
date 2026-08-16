@@ -350,7 +350,9 @@ function Session({ items, onExit }: { items: QueueItem[]; onExit: () => void }) 
                   onClick={() => {
                     const correct = opt.wordId === current.wordId;
                     setFeedback(correct ? "right" : "wrong");
-                    if (shouldSpeakMeaning(stage, correct)) speakMandarin(current.meaning);
+                    if (shouldSpeakMeaning(stage, correct)) {
+                      speakWordThenMeaning(current.word, current.meaning);
+                    }
                   }}
                   className={`rounded-xl border px-4 py-3 text-left text-sm ${
                     feedback && opt.wordId === current.wordId
@@ -403,10 +405,10 @@ function Session({ items, onExit }: { items: QueueItem[]; onExit: () => void }) 
             </p>
             {feedback === "right" && stage === "meaning" && (
               <button
-                onClick={() => speakMandarin(current.meaning)}
+                onClick={() => speakWordThenMeaning(current.word, current.meaning)}
                 className="mt-3 rounded-xl border border-[color:var(--purple-soft)] px-4 py-2 text-sm text-[var(--purple)]"
               >
-                🔊 再听一遍中文释义
+                🔊 再听一遍英文和中文
               </button>
             )}
             <button
@@ -461,6 +463,17 @@ function speakMandarin(meaning: string): void {
   utterance.lang = "zh-CN";
   utterance.rate = 0.9;
   window.speechSynthesis.speak(utterance);
+}
+
+/** 选对后按「英式单词 → 普通话释义」连读，建立词形、语音和含义的联结。 */
+function speakWordThenMeaning(word: string, meaning: string): void {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const english = new SpeechSynthesisUtterance(word);
+  english.lang = "en-GB";
+  english.rate = 0.78;
+  english.onend = () => speakMandarin(meaning);
+  window.speechSynthesis.speak(english);
 }
 
 /**
