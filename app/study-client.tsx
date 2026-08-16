@@ -8,6 +8,7 @@ import {
   emptyStageResults,
   recordStageResult,
   shouldAppendRetry,
+  shouldSpeakMeaning,
   stagesForMastery,
   type StageResult,
 } from "../lib/study-flow";
@@ -346,7 +347,11 @@ function Session({ items, onExit }: { items: QueueItem[]; onExit: () => void }) 
                 <button
                   key={opt.wordId}
                   disabled={feedback !== null}
-                  onClick={() => setFeedback(opt.wordId === current.wordId ? "right" : "wrong")}
+                  onClick={() => {
+                    const correct = opt.wordId === current.wordId;
+                    setFeedback(correct ? "right" : "wrong");
+                    if (shouldSpeakMeaning(stage, correct)) speakMandarin(current.meaning);
+                  }}
                   className={`rounded-xl border px-4 py-3 text-left text-sm ${
                     feedback && opt.wordId === current.wordId
                       ? "border-[var(--green)] bg-[color-mix(in_srgb,var(--green)_10%,white)]"
@@ -396,6 +401,14 @@ function Session({ items, onExit }: { items: QueueItem[]; onExit: () => void }) 
             <p className={feedback === "right" ? "text-[var(--green)]" : "text-[var(--red)]"}>
               {feedback === "right" ? "答对了" : `正确答案：${current.word}`}
             </p>
+            {feedback === "right" && stage === "meaning" && (
+              <button
+                onClick={() => speakMandarin(current.meaning)}
+                className="mt-3 rounded-xl border border-[color:var(--purple-soft)] px-4 py-2 text-sm text-[var(--purple)]"
+              >
+                🔊 再听一遍中文释义
+              </button>
+            )}
             <button
               onClick={() => advance(feedback === "right")}
               className="mt-3 w-full rounded-xl bg-[var(--purple)] px-5 py-3 text-white"
@@ -438,6 +451,15 @@ function speakBritish(word: string): void {
   const utterance = new SpeechSynthesisUtterance(word);
   utterance.lang = "en-GB";
   utterance.rate = 0.78;
+  window.speechSynthesis.speak(utterance);
+}
+
+function speakMandarin(meaning: string): void {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(meaning);
+  utterance.lang = "zh-CN";
+  utterance.rate = 0.9;
   window.speechSynthesis.speak(utterance);
 }
 

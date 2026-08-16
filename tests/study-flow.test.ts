@@ -5,6 +5,7 @@ import {
   emptyStageResults,
   recordStageResult,
   shouldAppendRetry,
+  shouldSpeakMeaning,
   stagesForMastery,
 } from "../lib/study-flow.ts";
 
@@ -30,4 +31,10 @@ test("错词只在组末重现一次", () => {
   assert.equal(shouldAppendRetry(true, false), true);
   assert.equal(shouldAppendRetry(true, true), false);
   assert.equal(shouldAppendRetry(false, false), false);
+});
+
+test("只在认义选对时朗读中文释义", () => {
+  assert.equal(shouldSpeakMeaning("meaning", true), true);
+  assert.equal(shouldSpeakMeaning("meaning", false), false);
+  assert.equal(shouldSpeakMeaning("spell", true), false);
 });

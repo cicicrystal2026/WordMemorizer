@@ -44,3 +44,8 @@ export function recordStageResult(
 export function shouldAppendRetry(hadMistake: boolean, alreadyRetried: boolean): boolean {
   return hadMistake && !alreadyRetried;
 }
+
+/** 只在认义选对时朗读中文，避免把错误选项也重复强化。 */
+export function shouldSpeakMeaning(stage: Stage, correct: boolean): boolean {
+  return stage === "meaning" && correct;
+}
