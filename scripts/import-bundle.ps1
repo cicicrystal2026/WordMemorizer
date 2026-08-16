@@ -20,7 +20,7 @@ param(
     [Parameter(Mandatory)]
     [string]$BundlePath,
 
-    [string]$RepoPath = 'D:\AI\AI-App\wordmemorizer',
+    [string]$RepoPath = 'D:\codex-project\beidancishenqi',
     [string]$Branch   = 'claude/word-memorizer-product-design-b63tz4',
     [switch]$NoPush
 )

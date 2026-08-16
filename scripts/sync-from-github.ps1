@@ -8,7 +8,7 @@
 
 .EXAMPLE
     .\sync-from-github.ps1
-    用默认参数同步到 D:\AI\AI-App\wordmemorizer
+    用默认参数同步到 D:\codex-project\beidancishenqi
 
 .EXAMPLE
     .\sync-from-github.ps1 -Branch main
@@ -16,7 +16,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$RepoPath  = 'D:\AI\AI-App\wordmemorizer',
+    [string]$RepoPath  = 'D:\codex-project\beidancishenqi',
     [string]$RemoteUrl = 'https://github.com/cicicrystal2026/wordmemorizer.git',
     [string]$Branch    = 'claude/word-memorizer-product-design-b63tz4'
 )

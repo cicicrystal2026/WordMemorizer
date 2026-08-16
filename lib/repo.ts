@@ -2,9 +2,9 @@ import { and, eq, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 
 import { getDb } from "../db";
 import { studyStates, users, wordbooks, words } from "../db/schema";
-import { DEFAULT_USER_ID, DEFAULT_USER_NAME } from "./constants";
+import { DEFAULT_USER_ID, DEFAULT_USER_NAME, REVIEW_INTERVALS } from "./constants";
 import type { ParsedEntry } from "./parse/entry";
-import { initialState, today } from "./scheduler";
+import { initialState, prioritizeReviews, today } from "./scheduler";
 
 export type Db = ReturnType<typeof getDb>;
 
@@ -121,13 +121,83 @@ export type QueueItem = {
   isNew: boolean;
 };
 
+/** `composeQueue` 需要的行形状，与下面 SQL 的 select 一一对应。 */
+export type QueueRow = {
+  wordId: number;
+  word: string;
+  pos: string;
+  meaning: string;
+  isKey: boolean;
+  needsReview: boolean;
+  mastery: string;
+  reviewCount: number;
+  interval: number;
+  dueAt: string | null;
+};
+
+export type QueueOptions = {
+  dailyNew: number;
+  limit: number;
+  /** 单日复习上限。默认 dailyNew × 复习档位数，即稳态下的自然复习量。 */
+  capacity?: number;
+};
+
+/**
+ * 队列组装（纯函数，与数据库无关，便于直接测试）。
+ *
+ * 复习排在新词前面，但**不能无上限**：落后几天后到期词会堆到几百个，
+ * 若让复习吃满 limit，孩子就再也学不到新词、计划永远追不回来。
+ * 因此复习先按紧急度截断到 capacity，剩下的名额才给新词。
+ */
+export function composeQueue(rows: QueueRow[], opts: QueueOptions, day: string): QueueItem[] {
+  const map = (r: QueueRow): QueueItem => ({
+    wordId: r.wordId,
+    word: r.word,
+    pos: safeParse(r.pos),
+    meaning: r.meaning,
+    isKey: r.isKey,
+    needsReview: r.needsReview,
+    mastery: r.mastery,
+    isNew: r.reviewCount === 0,
+  });
+
+  // 上限只为「给新词留位置」而存在。dailyNew 为 0 时（计划背完、或当天不学新词）
+  // 没有要保护的对象，复习可以用满 limit——否则会算出容量 0，一个复习都不给。
+  const defaultCapacity = opts.dailyNew > 0 ? opts.dailyNew * REVIEW_INTERVALS.length : opts.limit;
+  const reviewCapacity = Math.min(opts.capacity ?? defaultCapacity, opts.limit);
+
+  const dueRows = new Map(rows.filter((r) => r.reviewCount > 0).map((r) => [r.wordId, r]));
+  const order = prioritizeReviews(
+    Array.from(dueRows.values(), (r) => ({
+      wordId: r.wordId,
+      // 学过但没有 dueAt 属于异常数据；SQL 已判定它到期，这里不能让它凭空消失。
+      dueAt: r.dueAt ?? day,
+      interval: r.interval,
+      isKey: r.isKey,
+    })),
+    day,
+    reviewCapacity,
+  );
+  const due = order.map((id) => map(dueRows.get(id)!));
+
+  const freshSlots = Math.max(0, Math.min(opts.dailyNew, opts.limit - due.length));
+  const fresh = rows
+    .filter((r) => r.reviewCount === 0)
+    // 重点词优先。
+    .sort((a, b) => Number(b.isKey) - Number(a.isKey))
+    .slice(0, freshSlots)
+    .map(map);
+
+  return [...due, ...fresh];
+}
+
 /**
  * 今日队列 = 到期复习 + 新词。复习排在前面：落后时按优先级截断，
  * 保证「每天的量可完成」优先于「保证计划不变」。
  */
 export async function todayQueue(
   db: Db,
-  opts: { wordbookId?: number; dailyNew: number; limit: number },
+  opts: { wordbookId?: number } & QueueOptions,
 ): Promise<QueueItem[]> {
   const day = today();
 
@@ -141,6 +211,7 @@ export async function todayQueue(
       needsReview: words.needsReview,
       mastery: studyStates.mastery,
       reviewCount: studyStates.reviewCount,
+      interval: studyStates.interval,
       dueAt: studyStates.dueAt,
     })
     .from(words)
@@ -156,26 +227,7 @@ export async function todayQueue(
 
   const rows = await base.where(and(...filters));
 
-  const map = (r: (typeof rows)[number]): QueueItem => ({
-    wordId: r.wordId,
-    word: r.word,
-    pos: safeParse(r.pos),
-    meaning: r.meaning,
-    isKey: r.isKey,
-    needsReview: r.needsReview,
-    mastery: r.mastery,
-    isNew: r.reviewCount === 0,
-  });
-
-  const due = rows.filter((r) => r.reviewCount > 0).map(map);
-  const fresh = rows
-    .filter((r) => r.reviewCount === 0)
-    // 重点词优先。
-    .sort((a, b) => Number(b.isKey) - Number(a.isKey))
-    .slice(0, opts.dailyNew)
-    .map(map);
-
-  return [...due, ...fresh].slice(0, opts.limit);
+  return composeQueue(rows, opts, day);
 }
 
 export async function getStates(db: Db, wordIds: number[]) {
