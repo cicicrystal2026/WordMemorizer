@@ -171,7 +171,7 @@ export default function DetailClient({ wordId }: { wordId: number }) {
             <dd className="inline text-[var(--ink)]">{MASTERY_LABEL[word.mastery]}</dd>
           </div>
           <div>
-            <dt className="inline">学过 </dt>
+            <dt className="inline">已读 </dt>
             <dd className="inline text-[var(--ink)]">{word.reviewCount} 次</dd>
           </div>
           {word.dueAt && (
@@ -181,6 +181,7 @@ export default function DetailClient({ wordId }: { wordId: number }) {
             </div>
           )}
         </dl>
+        <p className="mt-2 text-xs text-[var(--muted)]">每完成一次学习关卡，系统会自动累计一次。</p>
 
         {word.needsReview && (
           <p className="mt-3 rounded-xl bg-[color-mix(in_srgb,var(--orange)_14%,white)] p-3 text-xs leading-relaxed">

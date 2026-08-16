@@ -191,7 +191,7 @@ export default function LibraryClient() {
                 <span className="shrink-0 text-right text-xs text-[var(--muted)]">
                   {MASTERY_LABEL[r.mastery]}
                   <br />
-                  学过 {r.reviewCount} 次
+                  已读 {r.reviewCount} 次
                 </span>
               </button>
 
