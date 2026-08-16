@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 
 import { getDb } from "../db";
 import { studyStates, users, wordbooks, words } from "../db/schema";
@@ -148,6 +148,8 @@ export async function todayQueue(
 
   const filters = [
     eq(studyStates.userId, DEFAULT_USER_ID),
+    // 永久掌握只保留在词库中，不能在到期后悄悄回流到常规队列。
+    ne(studyStates.mastery, "mastered"),
     or(isNull(studyStates.dueAt), lte(studyStates.dueAt, day)),
   ];
   if (opts.wordbookId) filters.push(eq(words.wordbookId, opts.wordbookId));

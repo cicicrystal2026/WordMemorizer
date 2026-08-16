@@ -4,6 +4,13 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { GROUP_SIZE, MASTERY_LABEL, type Mastery, type Stage } from "../lib/constants";
+import {
+  emptyStageResults,
+  recordStageResult,
+  shouldAppendRetry,
+  stagesForMastery,
+  type StageResult,
+} from "../lib/study-flow";
 
 type QueueItem = {
   wordId: number;
@@ -12,14 +19,12 @@ type QueueItem = {
   meaning: string;
   isKey: boolean;
   needsReview: boolean;
-  mastery: string;
+  mastery: Mastery;
   isNew: boolean;
 };
 
 type Counts = { total: number; newWords: number; reviews: number };
 
-/** M1 的学习环节。跟读（shadow）在 M5 接入发音评测后插入认读之后。 */
-const FLOW: Stage[] = ["recognize", "meaning", "spell"];
 const FLOW_LABEL: Record<Stage, string> = {
   recognize: "认读",
   shadow: "跟读",
@@ -164,15 +169,22 @@ export default function StudyClient() {
  * 因为「认得出但拼不对」同样不算掌握。
  */
 function Session({ items, onExit }: { items: QueueItem[]; onExit: () => void }) {
+  const [sessionItems, setSessionItems] = useState(() =>
+    items.filter((item) => stagesForMastery(item.mastery).length > 0),
+  );
   const [index, setIndex] = useState(0);
   const [stageIdx, setStageIdx] = useState(0);
   const [wrong, setWrong] = useState<Set<number>>(new Set());
+  const [retried, setRetried] = useState<Set<number>>(new Set());
+  const [hadMistake, setHadMistake] = useState(false);
+  const [results, setResults] = useState<StageResult>(emptyStageResults);
   const [answer, setAnswer] = useState("");
   const [feedback, setFeedback] = useState<"right" | "wrong" | null>(null);
   const [done, setDone] = useState(false);
 
-  const current = items[index];
-  const stage = FLOW[stageIdx];
+  const current = sessionItems[index];
+  const flow = current ? stagesForMastery(current.mastery) : [];
+  const stage = flow[stageIdx];
 
   const options = useMemo(() => {
     if (!current) return [];
@@ -192,17 +204,29 @@ function Session({ items, onExit }: { items: QueueItem[]; onExit: () => void }) 
   }
 
   function advance(correct: boolean) {
-    if (!correct) setWrong((prev) => new Set(prev).add(current.wordId));
+    if (!current || !stage) return;
+    if (!correct) {
+      setWrong((prev) => new Set(prev).add(current.wordId));
+      setHadMistake(true);
+    }
+    setResults((prev) => recordStageResult(prev, stage, correct));
     void report(current, correct, stage);
 
     setFeedback(null);
     setAnswer("");
-    if (stageIdx < FLOW.length - 1) {
+    if (stageIdx < flow.length - 1) {
       setStageIdx(stageIdx + 1);
       return;
     }
+
+    const retry = shouldAppendRetry(hadMistake || !correct, retried.has(current.wordId));
+    if (retry) {
+      setSessionItems((prev) => [...prev, current]);
+      setRetried((prev) => new Set(prev).add(current.wordId));
+    }
+    setHadMistake(false);
     setStageIdx(0);
-    if (index < items.length - 1) setIndex(index + 1);
+    if (index < sessionItems.length - 1 || retry) setIndex(index + 1);
     else setDone(true);
   }
 
@@ -215,7 +239,7 @@ function Session({ items, onExit }: { items: QueueItem[]; onExit: () => void }) 
     setStageIdx(0);
     setFeedback(null);
     setAnswer("");
-    if (index < items.length - 1) setIndex(index + 1);
+    if (index < sessionItems.length - 1) setIndex(index + 1);
     else setDone(true);
   }
 
@@ -227,6 +251,15 @@ function Session({ items, onExit }: { items: QueueItem[]; onExit: () => void }) 
           <p className="text-sm text-[var(--muted)]">
             共 {items.length} 词，待巩固 {wrong.size} 个
           </p>
+          <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+            <Score label="认读" score={results.recognize} />
+            <Score label="认义" score={results.meaning} />
+            <Score label="拼写" score={results.spell} />
+            <div className="rounded-xl bg-[var(--purple-soft)] p-3">
+              <dt className="text-xs text-[var(--muted)]">发音</dt>
+              <dd className="mt-1 font-medium">M5 开启</dd>
+            </div>
+          </dl>
           <button
             onClick={onExit}
             className="mt-4 w-full rounded-xl bg-[var(--purple)] px-5 py-3 text-white"
@@ -238,7 +271,9 @@ function Session({ items, onExit }: { items: QueueItem[]; onExit: () => void }) 
     );
   }
 
-  const progress = ((index + stageIdx / FLOW.length) / items.length) * 100;
+  if (!current || !stage) return null;
+
+  const progress = ((index + stageIdx / flow.length) / sessionItems.length) * 100;
 
   return (
     <Shell>
@@ -247,7 +282,7 @@ function Session({ items, onExit }: { items: QueueItem[]; onExit: () => void }) 
           ‹ 退出
         </button>
         <span className="text-[var(--muted)]">
-          {FLOW_LABEL[stage]} · {index + 1}/{items.length}
+          {FLOW_LABEL[stage]} · {index + 1}/{sessionItems.length}
         </span>
       </header>
       <div className="mt-3 h-1 rounded-full bg-[var(--purple-soft)]">
@@ -356,6 +391,15 @@ function Session({ items, onExit }: { items: QueueItem[]; onExit: () => void }) 
         ))}
       </div>
     </Shell>
+  );
+}
+
+function Score({ label, score }: { label: string; score: { correct: number; total: number } }) {
+  return (
+    <div className="rounded-xl bg-[var(--purple-soft)] p-3">
+      <dt className="text-xs text-[var(--muted)]">{label}</dt>
+      <dd className="mt-1 font-medium">{score.total > 0 ? `${score.correct}/${score.total}` : "—"}</dd>
+    </div>
   );
 }
 

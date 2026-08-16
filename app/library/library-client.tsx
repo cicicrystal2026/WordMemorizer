@@ -34,6 +34,14 @@ const MASTERY_VAR: Record<Mastery, string> = {
   mastered: "var(--mastery-mastered)",
 };
 
+type CoverMode = "none" | "word" | "meaning";
+
+const COVER_MODES: { key: CoverMode; label: string }[] = [
+  { key: "none", label: "无遮盖" },
+  { key: "word", label: "遮英文" },
+  { key: "meaning", label: "遮中文" },
+];
+
 type WordsResult = { ok: true; words: WordRow[] } | { ok: false; error: string };
 
 /** 纯取数，不碰组件状态；副作用里因此不会同步调用会 setState 的函数。 */
@@ -53,6 +61,8 @@ export default function LibraryClient() {
   const [filter, setFilter] = useState("all");
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<number | null>(null);
+  const [cover, setCover] = useState<CoverMode>("none");
+  const [revealed, setRevealed] = useState<Set<number>>(new Set());
 
   const apply = useCallback((result: WordsResult) => {
     if (!result.ok) {
@@ -113,6 +123,26 @@ export default function LibraryClient() {
         ))}
       </div>
 
+      <div className="mt-3 flex items-center gap-2 text-xs">
+        <span className="shrink-0 text-[var(--muted)]">遮盖自测</span>
+        <div className="flex gap-1 rounded-lg bg-[var(--purple-soft)] p-1">
+          {COVER_MODES.map((mode) => (
+            <button
+              key={mode.key}
+              onClick={() => {
+                setCover(mode.key);
+                setRevealed(new Set());
+              }}
+              className={`rounded-md px-2 py-1 ${
+                cover === mode.key ? "bg-white text-[var(--purple)] shadow-sm" : "text-[var(--muted)]"
+              }`}
+            >
+              {mode.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <p className="mt-3 text-xs text-[var(--muted)]">{rows.length} 词</p>
 
       {rows.length === 0 ? (
@@ -127,7 +157,18 @@ export default function LibraryClient() {
           {rows.map((r) => (
             <li key={r.wordId} className="overflow-hidden rounded-2xl bg-white">
               <button
-                onClick={() => setOpen(open === r.wordId ? null : r.wordId)}
+                onClick={() => {
+                  if (cover !== "none" && !revealed.has(r.wordId)) {
+                    setRevealed((prev) => new Set(prev).add(r.wordId));
+                    return;
+                  }
+                  setOpen(open === r.wordId ? null : r.wordId);
+                }}
+                aria-label={
+                  cover !== "none" && !revealed.has(r.wordId)
+                    ? `显示${cover === "word" ? "英文" : "中文"}答案`
+                    : undefined
+                }
                 className="flex w-full items-center gap-3 p-4 text-left"
               >
                 <span
@@ -137,12 +178,14 @@ export default function LibraryClient() {
                 />
                 <span className="min-w-0 flex-1">
                   <span className="flex items-baseline gap-2">
-                    <span className="font-medium">{r.word}</span>
+                    <span className="font-medium">
+                      {cover === "word" && !revealed.has(r.wordId) ? "点击显示英文" : r.word}
+                    </span>
                     {r.isKey && <span className="text-xs">🚩</span>}
                     <span className="text-xs text-[var(--muted)]">{r.pos.join("/")}</span>
                   </span>
                   <span className="mt-0.5 block truncate text-sm text-[var(--muted)]">
-                    {r.meaning}
+                    {cover === "meaning" && !revealed.has(r.wordId) ? "点击显示中文" : r.meaning}
                   </span>
                 </span>
                 <span className="shrink-0 text-right text-xs text-[var(--muted)]">
