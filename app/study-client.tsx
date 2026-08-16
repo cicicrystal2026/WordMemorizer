@@ -35,7 +35,7 @@ const FLOW_LABEL: Record<Stage, string> = {
 };
 
 type TodayResult =
-  | { ok: true; queue: QueueItem[]; counts: Counts | null }
+  | { ok: true; queue: QueueItem[]; counts: Counts | null; correctToday: number }
   | { ok: false; error: string };
 
 /**
@@ -51,10 +51,18 @@ async function fetchToday(): Promise<TodayResult> {
       plan?: { dailyNew: number } | null;
     };
     const dailyNew = planData.plan?.dailyNew ?? 20;
-    const res = await fetch(`/api/study/today?limit=200&dailyNew=${dailyNew}`);
+    const [res, statsRes] = await Promise.all([
+      fetch(`/api/study/today?limit=200&dailyNew=${dailyNew}`),
+      fetch("/api/stats"),
+    ]);
     const data = (await res.json()) as { queue?: QueueItem[]; counts?: Counts; error?: string };
     if (!res.ok) return { ok: false, error: data.error ?? "加载失败" };
-    return { ok: true, queue: data.queue ?? [], counts: data.counts ?? null };
+    const stats = statsRes.ok
+      ? await statsRes.json() as { daily?: { day: string; correct: number }[] }
+      : {};
+    const day = new Date().toISOString().slice(0, 10);
+    const correctToday = stats.daily?.find((entry) => entry.day === day)?.correct ?? 0;
+    return { ok: true, queue: data.queue ?? [], counts: data.counts ?? null, correctToday };
   } catch {
     return { ok: false, error: "网络异常" };
   }
@@ -63,6 +71,7 @@ async function fetchToday(): Promise<TodayResult> {
 export default function StudyClient() {
   const [queue, setQueue] = useState<QueueItem[] | null>(null);
   const [counts, setCounts] = useState<Counts | null>(null);
+  const [correctToday, setCorrectToday] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
 
@@ -73,6 +82,7 @@ export default function StudyClient() {
     }
     setQueue(result.queue);
     setCounts(result.counts);
+    setCorrectToday(result.correctToday);
     setError(null);
   }, []);
 
@@ -131,6 +141,8 @@ export default function StudyClient() {
     return (
       <Session
         items={queue.slice(0, GROUP_SIZE)}
+        correctToday={correctToday}
+        onCorrect={() => setCorrectToday((current) => current + 1)}
         onExit={() => {
           setRunning(false);
           void reload();
@@ -169,7 +181,17 @@ export default function StudyClient() {
  * 整组结束后统一上报——错过任何一关都算这个词未通过，
  * 因为「认得出但拼不对」同样不算掌握。
  */
-function Session({ items, onExit }: { items: QueueItem[]; onExit: () => void }) {
+function Session({
+  items,
+  correctToday,
+  onCorrect,
+  onExit,
+}: {
+  items: QueueItem[];
+  correctToday: number;
+  onCorrect: () => void;
+  onExit: () => void;
+}) {
   const [sessionItems, setSessionItems] = useState(() =>
     items.filter((item) => stagesForMastery(item.mastery).length > 0),
   );
@@ -216,6 +238,7 @@ function Session({ items, onExit }: { items: QueueItem[]; onExit: () => void }) 
       setHadMistake(true);
     }
     setResults((prev) => recordStageResult(prev, stage, correct));
+    if (correct) onCorrect();
     void report(current, correct, stage);
 
     setFeedback(null);
@@ -403,6 +426,11 @@ function Session({ items, onExit }: { items: QueueItem[]; onExit: () => void }) 
             <p className={feedback === "right" ? "text-[var(--green)]" : "text-[var(--red)]"}>
               {feedback === "right" ? "答对了" : `正确答案：${current.word}`}
             </p>
+            {feedback === "right" && (
+              <p className="mt-2 text-sm font-medium text-[var(--purple)]">
+                👍 太棒了！今天已答对 {correctToday + 1} 题
+              </p>
+            )}
             {feedback === "right" && stage === "meaning" && (
               <button
                 onClick={() => speakWordThenMeaning(current.word, current.meaning)}
