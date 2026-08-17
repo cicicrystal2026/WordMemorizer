@@ -5,6 +5,8 @@ import { createWordbook } from "../../../lib/repo";
 import { routeError } from "../../../lib/route-error";
 
 export const dynamic = "force-dynamic";
+// 大词书首次导入会同时创建词条和学习状态，默认函数时限不足以完成整批迁移。
+export const maxDuration = 60;
 
 /**
  * 表格与含文本层的 PDF 在浏览器端解析后，把结构化结果 POST 到这里。
