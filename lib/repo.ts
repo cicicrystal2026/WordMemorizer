@@ -17,14 +17,13 @@ export async function ensureUser(db: Db): Promise<void> {
 }
 
 /**
- * D1 对单条语句的绑定变量数有上限（超出报 "too many SQL variables"）。
- * 批大小必须按列数反算，不能拍一个固定行数——9 列时 50 行就是 450 个变量，
- * 直接超限。
+ * Postgres 对单条语句的绑定变量数有限制。按列数反算批大小，词书导入变大时
+ * 仍不会因为参数数目溢出而整体失败。
  */
-const D1_MAX_VARIABLES = 100;
+const POSTGRES_MAX_VARIABLES = 65_535;
 
 function chunkSize(columns: number): number {
-  return Math.max(1, Math.floor(D1_MAX_VARIABLES / columns));
+  return Math.max(1, Math.floor(POSTGRES_MAX_VARIABLES / columns));
 }
 
 export async function createWordbook(

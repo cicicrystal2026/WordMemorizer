@@ -28,9 +28,6 @@
       ]
     },
     "allowImportingTsExtensions": true,
-    "types": [
-      "@cloudflare/workers-types"
-    ]
   },
   "include": [
     "next-env.d.ts",
@@ -41,6 +38,10 @@
     "**/*.mts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "examples",
+    "worker",
+    "build",
+    "dist"
   ]
 }

@@ -1,8 +1,0 @@
-{
-  "$comment": "部署参数。构建产物 dist/server/wrangler.json 里的 D1 是占位 ID，deploy.ps1 会用这里的值覆盖它。database_id 不是密钥，可以入库；口令用 wrangler secret 单独设置，不写在这里。",
-  "workerName": "mightybug",
-  "d1DatabaseName": "mightybug",
-  "d1DatabaseId": "在此填入 wrangler d1 create 返回的 database_id",
-  "r2BucketName": "mightybug-files",
-  "customDomains": ["mightybug.cn", "www.mightybug.cn"]
-}

@@ -32,14 +32,14 @@ export async function GET() {
     const since = addDays(new Date(), -30);
     const daily = await db
       .select({
-        day: sql<string>`substr(${studyLogs.answeredAt}, 1, 10)`,
+        day: sql<string>`to_char(${studyLogs.answeredAt}::timestamptz, 'YYYY-MM-DD')`,
         total: sql<number>`count(*)`,
         correct: sql<number>`sum(case when ${studyLogs.correct} then 1 else 0 end)`,
       })
       .from(studyLogs)
       .where(and(eq(studyLogs.userId, DEFAULT_USER_ID), gte(studyLogs.answeredAt, since)))
-      .groupBy(sql`substr(${studyLogs.answeredAt}, 1, 10)`)
-      .orderBy(sql`substr(${studyLogs.answeredAt}, 1, 10)`);
+      .groupBy(sql`to_char(${studyLogs.answeredAt}::timestamptz, 'YYYY-MM-DD')`)
+      .orderBy(sql`to_char(${studyLogs.answeredAt}::timestamptz, 'YYYY-MM-DD')`);
 
     // 错得最多的词，用于「查漏」场景。
     const troublesome = await db
