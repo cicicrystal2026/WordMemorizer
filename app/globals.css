@@ -10,6 +10,21 @@
   --orange: #ff9f43;
   --green: #35ad76;
   --red: #e84f5e;
+
+  /* 图表令牌。品牌色直接上图会出问题：#ff9f43 对白底对比仅 2.04:1，
+     且与 #35ad76 在红绿色盲下 ΔE 仅 7.3，两级掌握度分不出来。
+     以下取值经 validate_palette.js 校验。 */
+
+  /* 负荷曲线的两个系列（类别型，全项通过）*/
+  --series-new: #6845c3;
+  --series-review: #c2660b;
+
+  /* 掌握度是有序进度而非并列类别，故用单色相 light→dark 连续色阶，
+     亮度单调递减；身份始终由文字标签承载，不靠颜色单独区分。 */
+  --mastery-new: #ded3f7;
+  --mastery-learning: #b49ae8;
+  --mastery-familiar: #7f57d1;
+  --mastery-mastered: #4d2d9c;
 }
 
 * { box-sizing: border-box; }

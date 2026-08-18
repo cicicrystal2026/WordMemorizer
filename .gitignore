@@ -40,3 +40,10 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+
+# typescript 澧為噺鏋勫缓缂撳瓨
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+*.bundle
+背单词app参考-超级单词表/
